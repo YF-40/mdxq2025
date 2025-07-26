@@ -146,297 +146,315 @@
 
 	<canvas id="canvas" style="display:none;"></canvas>
 </span>
+
 <script>
-	const imageInput = document.getElementById('imageInput');
-	const canvas = document.getElementById('canvas');
-	const ctx = canvas.getContext('2d');
 
-	const shapeSelect = document.getElementById('shapeSelect');
-	const sizeRange = document.getElementById('sizeRange');
-	const sizeNumber = document.getElementById('sizeNumber');
-	const rectWidth = document.getElementById('rectWidth');
-	const rectWidthNumber = document.getElementById('rectWidthNumber');
-	const rectHeight = document.getElementById('rectHeight');
-	const rectHeightNumber = document.getElementById('rectHeightNumber');
-	const borderWidth = document.getElementById('borderWidth');
-	const borderWidthNumber = document.getElementById('borderWidthNumber');
-	const borderColor = document.getElementById('borderColor');
-	const borderColorText = document.getElementById('borderColorText');
-	const formatSelect = document.getElementById('formatSelect');
-	const downloadBtn = document.getElementById('downloadBtn');
-	const scaleRange = document.getElementById('scaleRange');
-	const scaleNumber = document.getElementById('scaleNumber');
+// 各HTML要素を取得
+const imageInput = document.getElementById('imageInput');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
 
-	const sizeRow = document.getElementById('sizeRow');
-	const widthRow = document.getElementById('widthRow');
-	const heightRow = document.getElementById('heightRow');
+const shapeSelect = document.getElementById('shapeSelect');
+const sizeRange = document.getElementById('sizeRange');
+const sizeNumber = document.getElementById('sizeNumber');
+const rectWidth = document.getElementById('rectWidth');
+const rectWidthNumber = document.getElementById('rectWidthNumber');
+const rectHeight = document.getElementById('rectHeight');
+const rectHeightNumber = document.getElementById('rectHeightNumber');
+const borderWidth = document.getElementById('borderWidth');
+const borderWidthNumber = document.getElementById('borderWidthNumber');
+const borderColor = document.getElementById('borderColor');
+const borderColorText = document.getElementById('borderColorText');
+const formatSelect = document.getElementById('formatSelect');
+const downloadBtn = document.getElementById('downloadBtn');
+const scaleRange = document.getElementById('scaleRange');
+const scaleNumber = document.getElementById('scaleNumber');
 
-	let image = new Image();
-	let imageLoaded = false;
-	let scale = 1;
-	let offsetX = 0, offsetY = 0;
-	let dragging = false;
-	let startX, startY;
-	let originalFileName = 'image';
+const sizeRow = document.getElementById('sizeRow');
+const widthRow = document.getElementById('widthRow');
+const heightRow = document.getElementById('heightRow');
 
-	imageInput.addEventListener('change', function () {
-		const file = this.files[0];
-		if (!file) return;
-		originalFileName = file.name.split('.').slice(0, -1).join('.') || 'image';
+// グローバル変数の初期化
+let image = new Image();  // アップロードされた画像を保持
+let imageLoaded = false;  // 画像が読み込まれたかどうか
+let scale = 1;            // 拡大率
+let offsetX = 0, offsetY = 0; // 画像の位置のオフセット
+let dragging = false;     // ドラッグ中かどうか
+let startX, startY;       // ドラッグ開始位置
+let originalFileName = 'image'; // 元ファイル名（保存時に使用）
 
-		const reader = new FileReader();
-		reader.onload = function (e) {
-			image.onload = () => {
-				imageLoaded = true;
-				scale = 1;
-				scaleRange.value = scaleNumber.value = "1";
-				offsetX = 0;
-				offsetY = 0;
-				canvas.style.display = 'block';
+// 画像を読み込んだ時の処理
+imageInput.addEventListener('change', function () {
+	const file = this.files[0];
+	if (!file) return;
 
-				const shape = shapeSelect.value;
-				if (shape === "circle") {
-					const side = Math.min(image.width, image.height, 400);
-					sizeRange.value = sizeNumber.value = side;
-				} else {
-					rectWidth.value = rectWidthNumber.value = Math.min(image.width, 400);
-					rectHeight.value = rectHeightNumber.value = Math.min(image.height, 300);
-				}
+	// 拡張子を除いたファイル名を取得
+	originalFileName = file.name.split('.').slice(0, -1).join('.') || 'image';
 
-				draw();
-			};
-			image.src = e.target.result;
+	const reader = new FileReader();
+	reader.onload = function (e) {
+		image.onload = () => {
+			// 画像が読み込まれたときの初期設定
+			imageLoaded = true;
+			scale = 1;
+			scaleRange.value = scaleNumber.value = "1";
+			offsetX = 0;
+			offsetY = 0;
+			canvas.style.display = 'block';
+
+			// 初期サイズ設定（形状に応じて）
+			const shape = shapeSelect.value;
+			if (shape === "circle") {
+				const side = Math.min(image.width, image.height, 400);
+				sizeRange.value = sizeNumber.value = side;
+			} else {
+				rectWidth.value = rectWidthNumber.value = Math.min(image.width, 400);
+				rectHeight.value = rectHeightNumber.value = Math.min(image.height, 300);
+			}
+
+			draw(); // キャンバスに描画
 		};
-		reader.readAsDataURL(file);
-	});
+		image.src = e.target.result;
+	};
+	reader.readAsDataURL(file); // 画像をBase64に変換して読み込む
+});
 
-	function draw() {
-		if (!imageLoaded) return;
+// キャンバスに画像を描画する関数
+function draw() {
+	if (!imageLoaded) return;
 
-		const shape = shapeSelect.value;
-		const border = parseInt(borderWidth.value);
-		let width, height;
+	const shape = shapeSelect.value;
+	const border = parseInt(borderWidth.value);
+	let width, height;
 
-		if (shape === "circle") {
-			width = height = parseInt(sizeRange.value);
-		} else {
-			width = parseInt(rectWidth.value);
-			height = parseInt(rectHeight.value);
-		}
+	// 形状によってサイズを決定
+	if (shape === "circle") {
+		width = height = parseInt(sizeRange.value);
+	} else {
+		width = parseInt(rectWidth.value);
+		height = parseInt(rectHeight.value);
+	}
 
-		canvas.width = width;
-		canvas.height = height;
-		ctx.clearRect(0, 0, width, height);
+	canvas.width = width;
+	canvas.height = height;
+	ctx.clearRect(0, 0, width, height); // キャンバスをクリア
 
-		ctx.save();
-		if (shape === "circle") {
-			ctx.beginPath();
-			ctx.arc(width / 2, height / 2, width / 2 - border, 0, Math.PI * 2);
-			ctx.closePath();
-			ctx.clip();
-		}
-
-		const imgW = image.width * scale;
-		const imgH = image.height * scale;
-		const x = width / 2 - imgW / 2 + offsetX;
-		const y = height / 2 - imgH / 2 + offsetY;
-		ctx.drawImage(image, x, y, imgW, imgH);
-		ctx.restore();
-
+	ctx.save();
+	if (shape === "circle") {
+		// 丸くクリップする（切り抜き）
 		ctx.beginPath();
-		if (shape === "circle") {
-			ctx.arc(width / 2, height / 2, width / 2 - border / 2, 0, Math.PI * 2);
-		} else {
-			const pad = border / 2;
-			ctx.rect(pad, pad, width - pad * 2, height - pad * 2);
-		}
-		ctx.strokeStyle = borderColor.value;
-		ctx.lineWidth = border;
-		ctx.stroke();
+		ctx.arc(width / 2, height / 2, width / 2 - border, 0, Math.PI * 2);
+		ctx.closePath();
+		ctx.clip();
 	}
 
-	function bindSliderAndNumber(rangeEl, numberEl, callback) {
-		rangeEl.addEventListener('input', () => {
-			numberEl.value = rangeEl.value;
-			callback();
-		});
-		numberEl.addEventListener('input', () => {
-			rangeEl.value = numberEl.value;
-			callback();
-		});
+	// 拡大率に応じた画像サイズを計算し、中央に配置
+	const imgW = image.width * scale;
+	const imgH = image.height * scale;
+	const x = width / 2 - imgW / 2 + offsetX;
+	const y = height / 2 - imgH / 2 + offsetY;
+	ctx.drawImage(image, x, y, imgW, imgH);
+	ctx.restore();
+
+	// 枠線を描画
+	ctx.beginPath();
+	if (shape === "circle") {
+		ctx.arc(width / 2, height / 2, width / 2 - border / 2, 0, Math.PI * 2);
+	} else {
+		const pad = border / 2;
+		ctx.rect(pad, pad, width - pad * 2, height - pad * 2);
 	}
+	ctx.strokeStyle = borderColor.value;
+	ctx.lineWidth = border;
+	ctx.stroke();
+}
 
-	bindSliderAndNumber(sizeRange, sizeNumber, draw);
-	bindSliderAndNumber(borderWidth, borderWidthNumber, draw);
-	bindSliderAndNumber(rectWidth, rectWidthNumber, draw);
-	bindSliderAndNumber(rectHeight, rectHeightNumber, draw);
-	bindSliderAndNumber(scaleRange, scaleNumber, () => {
-		scale = parseFloat(scaleRange.value);
+// スライダーと数値入力を同期させる関数
+function bindSliderAndNumber(rangeEl, numberEl, callback) {
+	rangeEl.addEventListener('input', () => {
+		numberEl.value = rangeEl.value;
+		callback();
+	});
+	numberEl.addEventListener('input', () => {
+		rangeEl.value = numberEl.value;
+		callback();
+	});
+}
+
+// 各コントロールと描画関数をバインド
+bindSliderAndNumber(sizeRange, sizeNumber, draw);
+bindSliderAndNumber(borderWidth, borderWidthNumber, draw);
+bindSliderAndNumber(rectWidth, rectWidthNumber, draw);
+bindSliderAndNumber(rectHeight, rectHeightNumber, draw);
+bindSliderAndNumber(scaleRange, scaleNumber, () => {
+	scale = parseFloat(scaleRange.value);
+	draw();
+});
+
+// 色の同期
+borderColor.addEventListener('input', () => {
+	borderColorText.value = borderColor.value;
+	draw();
+});
+borderColorText.addEventListener('input', () => {
+	const val = borderColorText.value.trim();
+	const temp = document.createElement('div');
+	temp.style.color = '';
+	temp.style.color = val;
+	if (temp.style.color !== '') {
+		borderColor.value = val;
 		draw();
-	});
+	}
+});
 
-	borderColor.addEventListener('input', () => {
-		borderColorText.value = borderColor.value;
-		draw();
-	});
-	borderColorText.addEventListener('input', () => {
-		const val = borderColorText.value.trim();
-		const temp = document.createElement('div');
-		temp.style.color = '';
-		temp.style.color = val;
-		if (temp.style.color !== '') {
-			borderColor.value = val;
-			draw();
-		}
-	});
+// トリミング形状変更時にUIを切り替える
+shapeSelect.addEventListener('input', () => {
+	const shape = shapeSelect.value;
+	sizeRow.style.display = shape === 'circle' ? 'flex' : 'none';
+	widthRow.style.display = shape === 'rect' ? 'flex' : 'none';
+	heightRow.style.display = shape === 'rect' ? 'flex' : 'none';
+	draw();
+});
 
-	shapeSelect.addEventListener('input', () => {
-		const shape = shapeSelect.value;
-		sizeRow.style.display = shape === 'circle' ? 'flex' : 'none';
-		widthRow.style.display = shape === 'rect' ? 'flex' : 'none';
-		heightRow.style.display = shape === 'rect' ? 'flex' : 'none';
-		draw();
-	});
-
-	canvas.addEventListener('mousedown', (e) => {
-		dragging = true;
+// ドラッグ処理（マウス）
+canvas.addEventListener('mousedown', (e) => {
+	dragging = true;
+	startX = e.offsetX;
+	startY = e.offsetY;
+	canvas.style.cursor = 'grabbing';
+});
+canvas.addEventListener('mouseup', () => { dragging = false; canvas.style.cursor = 'grab'; });
+canvas.addEventListener('mouseleave', () => { dragging = false; canvas.style.cursor = 'grab'; });
+canvas.addEventListener('mousemove', (e) => {
+	if (dragging && imageLoaded) {
+		offsetX += e.offsetX - startX;
+		offsetY += e.offsetY - startY;
 		startX = e.offsetX;
 		startY = e.offsetY;
-		canvas.style.cursor = 'grabbing';
-	});
-	canvas.addEventListener('mouseup', () => { dragging = false; canvas.style.cursor = 'grab'; });
-	canvas.addEventListener('mouseleave', () => { dragging = false; canvas.style.cursor = 'grab'; });
-	canvas.addEventListener('mousemove', (e) => {
-		if (dragging && imageLoaded) {
-			offsetX += e.offsetX - startX;
-			offsetY += e.offsetY - startY;
-			startX = e.offsetX;
-			startY = e.offsetY;
-			draw();
-		}
-	});
-
-	canvas.addEventListener('touchstart', (e) => {
-		const touch = e.touches[0];
-		const rect = canvas.getBoundingClientRect();
-		startX = touch.clientX - rect.left;
-		startY = touch.clientY - rect.top;
-		dragging = true;
-	});
-
-
-
-
-	let lastTouchDistance = null;
-
-	function getTouchDistance(touches) {
-		if (touches.length < 2) return null;
-		const dx = touches[0].clientX - touches[1].clientX;
-		const dy = touches[0].clientY - touches[1].clientY;
-		return Math.hypot(dx, dy);
+		draw();
 	}
+});
 
-	canvas.addEventListener('touchstart', (e) => {
-		if (e.touches.length === 2) {
-			lastTouchDistance = getTouchDistance(e.touches);
-		}
-	}, { passive: false });
+// タッチ処理（開始）
+canvas.addEventListener('touchstart', (e) => {
+	const touch = e.touches[0];
+	const rect = canvas.getBoundingClientRect();
+	startX = touch.clientX - rect.left;
+	startY = touch.clientY - rect.top;
+	dragging = true;
+});
 
-	canvas.addEventListener('touchmove', (e) => {
-		if (e.touches.length === 2 && imageLoaded) {
-			e.preventDefault();
-			const newDistance = getTouchDistance(e.touches);
-			if (lastTouchDistance && newDistance) {
-				const delta = newDistance / lastTouchDistance;
-				scale *= delta;
-				scale = Math.min(Math.max(scale, 0.1), 3);
-				scaleRange.value = scaleNumber.value = scale.toFixed(2);
-				draw();
-				lastTouchDistance = newDistance;
-			}
-		}
-	}, { passive: false });
+// ピンチイン・ピンチアウト（2本指で拡大縮小）
+let lastTouchDistance = null;
 
-	canvas.addEventListener('touchend', (e) => {
-		if (e.touches.length < 2) {
-			lastTouchDistance = null;
-		}
-	});
+function getTouchDistance(touches) {
+	if (touches.length < 2) return null;
+	const dx = touches[0].clientX - touches[1].clientX;
+	const dy = touches[0].clientY - touches[1].clientY;
+	return Math.hypot(dx, dy);
+}
 
+canvas.addEventListener('touchstart', (e) => {
+	if (e.touches.length === 2) {
+		lastTouchDistance = getTouchDistance(e.touches);
+	}
+}, { passive: false });
 
-
-
-	canvas.addEventListener('touchmove', (e) => {
-		if (!dragging || !imageLoaded) return;
+canvas.addEventListener('touchmove', (e) => {
+	if (e.touches.length === 2 && imageLoaded) {
 		e.preventDefault();
-		const touch = e.touches[0];
-		const rect = canvas.getBoundingClientRect();
-		const moveX = touch.clientX - rect.left;
-		const moveY = touch.clientY - rect.top;
-		offsetX += moveX - startX;
-		offsetY += moveY - startY;
-		startX = moveX;
-		startY = moveY;
-		draw();
-	}, { passive: false });
-	canvas.addEventListener('touchend', () => { dragging = false; });
-
-	canvas.addEventListener('wheel', (e) => {
-		if (!imageLoaded) return;
-		e.preventDefault();
-		const scaleAmount = e.deltaY > 0 ? 0.95 : 1.05;
-		scale *= scaleAmount;
-		scale = Math.min(Math.max(scale, 0.1), 3);
-		scaleRange.value = scaleNumber.value = scale.toFixed(2);
-		draw();
-	});
-
-	downloadBtn.addEventListener('click', () => {
-		const format = formatSelect.value;
-		const link = document.createElement('a');
-		link.download = `${originalFileName}_trim.${format}`;
-
-		if (format === 'jpeg') {
-			const tempCanvas = document.createElement('canvas');
-			tempCanvas.width = canvas.width;
-			tempCanvas.height = canvas.height;
-			const tempCtx = tempCanvas.getContext('2d');
-			tempCtx.fillStyle = '#fff';
-			tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-			tempCtx.drawImage(canvas, 0, 0);
-			link.href = tempCanvas.toDataURL('image/jpeg');
-		} else {
-			link.href = canvas.toDataURL('image/png');
+		const newDistance = getTouchDistance(e.touches);
+		if (lastTouchDistance && newDistance) {
+			const delta = newDistance / lastTouchDistance;
+			scale *= delta;
+			scale = Math.min(Math.max(scale, 0.1), 3);
+			scaleRange.value = scaleNumber.value = scale.toFixed(2);
+			draw();
+			lastTouchDistance = newDistance;
 		}
-		link.click();
+	}
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+	if (e.touches.length < 2) {
+		lastTouchDistance = null;
+	}
+});
+
+// 指でのドラッグ処理
+canvas.addEventListener('touchmove', (e) => {
+	if (!dragging || !imageLoaded) return;
+	e.preventDefault();
+	const touch = e.touches[0];
+	const rect = canvas.getBoundingClientRect();
+	const moveX = touch.clientX - rect.left;
+	const moveY = touch.clientY - rect.top;
+	offsetX += moveX - startX;
+	offsetY += moveY - startY;
+	startX = moveX;
+	startY = moveY;
+	draw();
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { dragging = false; });
+
+// ホイールによる拡大縮小
+canvas.addEventListener('wheel', (e) => {
+	if (!imageLoaded) return;
+	e.preventDefault();
+	const scaleAmount = e.deltaY > 0 ? 0.95 : 1.05;
+	scale *= scaleAmount;
+	scale = Math.min(Math.max(scale, 0.1), 3);
+	scaleRange.value = scaleNumber.value = scale.toFixed(2);
+	draw();
+});
+
+// 「画像を保存」ボタンクリック時の処理
+downloadBtn.addEventListener('click', () => {
+	const format = formatSelect.value;
+	const link = document.createElement('a');
+	link.download = `${originalFileName}_trim.${format}`;
+
+	// JPEG形式は白背景にする必要あり
+	if (format === 'jpeg') {
+		const tempCanvas = document.createElement('canvas');
+		tempCanvas.width = canvas.width;
+		tempCanvas.height = canvas.height;
+		const tempCtx = tempCanvas.getContext('2d');
+		tempCtx.fillStyle = '#fff';
+		tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+		tempCtx.drawImage(canvas, 0, 0);
+		link.href = tempCanvas.toDataURL('image/jpeg');
+	} else {
+		link.href = canvas.toDataURL('image/png');
+	}
+	link.click(); // 自動ダウンロード
+});
+
+// 初期状態で形状のUI切り替えを実行
+shapeSelect.dispatchEvent(new Event('input'));
+
+// ＋／－ボタンのクリックで数値入力を増減
+document.querySelectorAll('button.increase, button.decrease').forEach(btn => {
+	btn.addEventListener('click', () => {
+		const targetId = btn.dataset.target;
+		const input = document.getElementById(targetId);
+		const step = parseFloat(btn.dataset.step);
+		const isIncrease = btn.classList.contains('increase');
+		let value = parseFloat(input.value);
+		if (isNaN(value)) value = 0;
+		value += isIncrease ? step : -step;
+
+		// 最小・最大値の範囲内に調整
+		const min = parseFloat(input.min);
+		const max = parseFloat(input.max);
+		if (!isNaN(min)) value = Math.max(value, min);
+		if (!isNaN(max)) value = Math.min(value, max);
+
+		input.value = value.toFixed(2); // 小数点にも対応
+		input.dispatchEvent(new Event('input')); // 値を同期させる
 	});
-
-	shapeSelect.dispatchEvent(new Event('input'));
-
-	// + / - ボタン機能
-	document.querySelectorAll('button.increase, button.decrease').forEach(btn => {
-		btn.addEventListener('click', () => {
-			const targetId = btn.dataset.target;
-			const input = document.getElementById(targetId);
-			const step = parseFloat(btn.dataset.step);
-			const isIncrease = btn.classList.contains('increase');
-			let value = parseFloat(input.value);
-			if (isNaN(value)) value = 0;
-			value += isIncrease ? step : -step;
-
-			// 範囲チェック
-			const min = parseFloat(input.min);
-			const max = parseFloat(input.max);
-			if (!isNaN(min)) value = Math.max(value, min);
-			if (!isNaN(max)) value = Math.min(value, max);
-
-			input.value = value.toFixed(2); // 小数対応
-			input.dispatchEvent(new Event('input')); // イベント発火で同期
-		});
-	});
-
-
-
+});
 
 </script>
 
