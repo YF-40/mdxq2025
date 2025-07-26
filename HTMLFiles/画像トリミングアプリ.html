@@ -321,6 +321,49 @@
 		startY = touch.clientY - rect.top;
 		dragging = true;
 	});
+
+
+
+
+	let lastTouchDistance = null;
+
+	function getTouchDistance(touches) {
+		if (touches.length < 2) return null;
+		const dx = touches[0].clientX - touches[1].clientX;
+		const dy = touches[0].clientY - touches[1].clientY;
+		return Math.hypot(dx, dy);
+	}
+
+	canvas.addEventListener('touchstart', (e) => {
+		if (e.touches.length === 2) {
+			lastTouchDistance = getTouchDistance(e.touches);
+		}
+	}, { passive: false });
+
+	canvas.addEventListener('touchmove', (e) => {
+		if (e.touches.length === 2 && imageLoaded) {
+			e.preventDefault();
+			const newDistance = getTouchDistance(e.touches);
+			if (lastTouchDistance && newDistance) {
+				const delta = newDistance / lastTouchDistance;
+				scale *= delta;
+				scale = Math.min(Math.max(scale, 0.1), 3);
+				scaleRange.value = scaleNumber.value = scale.toFixed(2);
+				draw();
+				lastTouchDistance = newDistance;
+			}
+		}
+	}, { passive: false });
+
+	canvas.addEventListener('touchend', (e) => {
+		if (e.touches.length < 2) {
+			lastTouchDistance = null;
+		}
+	});
+
+
+
+
 	canvas.addEventListener('touchmove', (e) => {
 		if (!dragging || !imageLoaded) return;
 		e.preventDefault();
