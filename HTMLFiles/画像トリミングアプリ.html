@@ -42,23 +42,31 @@
 		}
 
 		input[type="range"] {
-			width: 120px;
+			width: 130px;
 		}
 
 		input[type="number"] {
-			width: 40px;
+			width: 30px;
 		}
 
 		button.decrease, button.increase {
+			background-color: rgb(174, 212, 197);
 			padding: 0 0.5rem;
 			font-size: 0.8rem;
 			height: 2rem;
 			cursor: pointer;
 		}
-		
+
+		#mainarea {
+			border-style: solid;
+			border-color: #999;
+			padding: 0.5rem;
+		}
+
 	</style>
 </head>
 <body>
+	<span id="mainarea">
 	<h1>画像トリミングアプリ</h1>
 
 	<input type="file" id="imageInput" accept="image/*">
@@ -135,7 +143,7 @@
 	</div>
 
 	<canvas id="canvas" style="display:none;"></canvas>
-
+</span>
 <script>
 	const imageInput = document.getElementById('imageInput');
 	const canvas = document.getElementById('canvas');
