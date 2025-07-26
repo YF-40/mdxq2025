@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="UTF-8">
+	<title>トリミングアプリ</title>
+	<style>
+		body {
+			font-family: sans-serif;
+			padding: 1rem;
+			background-color: #f5f5f5;
+
+	/* 以下を追加で中央寄せ全体 */
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+		}
+
+		canvas {
+			box-shadow: 0 0 10px rgba(0,0,0,0.2);
+			background-color: #eee;
+			cursor: grab;
+			margin-top: 1rem;
+			max-width: 100%;
+			touch-action: none;
+		}
+
+		.controls {
+			margin-top: 1rem;
+			display: flex;
+			flex-direction: column;
+			gap: 1rem;
+
+	/* 親要素として中央寄せ */
+	align-items: flex-start;
+	margin-left: auto;
+	margin-right: auto;
+
+		}
+
+		.row {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		input[type="range"] {
+			width: 150px;
+		}
+
+		input[type="number"] {
+			width: 40px;
+		}
+	</style>
+</head>
+<body>
+	<h1>画像トリミングアプリ</h1>
+
+	<input type="file" id="imageInput" accept="image/*">
+
+	<div class="controls">
+		<div class="row">
+			<label>トリミング形状:
+				<select id="shapeSelect">
+					<option value="circle">丸</option>
+					<option value="rect">四角</option>
+				</select>
+			</label>
+		</div>
+
+		<div class="row" id="sizeRow">
+			<label>　サイズ:
+				<input type="range" id="sizeRange" min="50" max="1000" value="300">
+				<input type="number" id="sizeNumber" min="50" max="1000" value="300">
+			</label>
+		</div>
+
+		<div class="row" id="widthRow">
+			<label>　　　幅:
+				<input type="range" id="rectWidth" min="50" max="1000" value="300">
+				<input type="number" id="rectWidthNumber" min="50" max="1000" value="300">
+			</label>
+		</div>
+
+		<div class="row" id="heightRow">
+			<label>　　高さ:
+				<input type="range" id="rectHeight" min="50" max="1000" value="300">
+				<input type="number" id="rectHeightNumber" min="50" max="1000" value="300">
+			</label>
+		</div>
+
+		<div class="row">
+			<label>枠の太さ:
+				<input type="range" id="borderWidth" min="0" max="20" value="4">
+				<input type="number" id="borderWidthNumber" min="0" max="20" value="4">
+			</label>
+		</div>
+
+		<div class="row">
+			<label>　枠の色:
+				<input type="color" id="borderColor" value="#ffffff">
+				<input type="text" id="borderColorText" value="#ffffff" style="width:80px;">
+			</label>
+		</div>
+
+		<div class="row">
+			<label>保存形式:
+				<select id="formatSelect">
+					<option value="png">PNG</option>
+					<option value="jpeg">JPEG</option>
+				</select>
+			</label>
+			<button id="downloadBtn">画像を保存</button>
+		</div>
+	</div>
+
+	<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+	// HTMLの各要素を取得（ユーザーが操作する部分や描画部分）
+	const imageInput = document.getElementById('imageInput');
+	const canvas = document.getElementById('canvas');
+	const ctx = canvas.getContext('2d'); // canvasに描くためのコンテキスト
+
+	// コントロールパネルの要素たち（形状・サイズなど）
+	const shapeSelect = document.getElementById('shapeSelect');
+	const sizeRange = document.getElementById('sizeRange');
+	const sizeNumber = document.getElementById('sizeNumber');
+	const rectWidth = document.getElementById('rectWidth');
+	const rectWidthNumber = document.getElementById('rectWidthNumber');
+	const rectHeight = document.getElementById('rectHeight');
+	const rectHeightNumber = document.getElementById('rectHeightNumber');
+	const borderWidth = document.getElementById('borderWidth');
+	const borderWidthNumber = document.getElementById('borderWidthNumber');
+	const borderColor = document.getElementById('borderColor');
+	const borderColorText = document.getElementById('borderColorText');
+	const formatSelect = document.getElementById('formatSelect');
+	const downloadBtn = document.getElementById('downloadBtn');
+
+	// 表示の切り替え用（形状によってUIを変える）
+	const sizeRow = document.getElementById('sizeRow');
+	const widthRow = document.getElementById('widthRow');
+	const heightRow = document.getElementById('heightRow');
+
+	// 初期状態の変数たち
+	let image = new Image(); // 画像データ
+	let imageLoaded = false; // 画像が読み込まれたかどうか
+	let scale = 1; // 拡大縮小の倍率
+	let offsetX = 0, offsetY = 0; // 画像の移動位置
+	let dragging = false; // ドラッグ中かどうか
+	let startX, startY; // ドラッグの開始位置
+	let originalFileName = 'image'; // 元のファイル名（保存時に使用）
+
+	// 画像ファイルを選択したときの処理
+	imageInput.addEventListener('change', function () {
+		const file = this.files[0]; // 選ばれたファイルを取得
+		if (!file) return;
+
+		// 拡張子を除いたファイル名を取得
+		originalFileName = file.name.split('.').slice(0, -1).join('.') || 'image';
+
+		const reader = new FileReader(); // ファイルを読み込むためのオブジェクト
+		reader.onload = function (e) {
+			image.onload = () => {
+				// 画像が読み込まれたときの処理
+				imageLoaded = true;
+				scale = 1;
+				offsetX = 0;
+				offsetY = 0;
+				canvas.style.display = 'block'; // canvasを表示
+
+				const shape = shapeSelect.value;
+				if (shape === "circle") {
+					// 円形のときは、正方形サイズに設定
+					const side = Math.min(image.width, image.height, 400);
+					sizeRange.value = sizeNumber.value = side;
+				} else {
+					// 四角形のときは幅と高さを設定
+					rectWidth.value = rectWidthNumber.value = Math.min(image.width, 400);
+					rectHeight.value = rectHeightNumber.value = Math.min(image.height, 300);
+				}
+
+				draw(); // 描画を実行
+			};
+			image.src = e.target.result; // 読み込んだ画像を表示
+		};
+		reader.readAsDataURL(file); // 画像をBase64形式で読み込み
+	});
+
+	// canvasに画像と枠を描画する関数
+	function draw() {
+		if (!imageLoaded) return;
+
+		const shape = shapeSelect.value;
+		const border = parseInt(borderWidth.value); // 枠の太さ
+		let width, height;
+
+		if (shape === "circle") {
+			width = height = parseInt(sizeRange.value); // 円形なら正方形
+		} else {
+			width = parseInt(rectWidth.value);
+			height = parseInt(rectHeight.value);
+		}
+
+		// canvasのサイズを更新
+		canvas.width = width;
+		canvas.height = height;
+		ctx.clearRect(0, 0, width, height); // 前の描画を消す
+
+		ctx.save(); // 現在の状態を保存（後で戻すため）
+
+		if (shape === "circle") {
+			// 円のクリップ領域を作成（中だけ描画される）
+			ctx.beginPath();
+			ctx.arc(width / 2, height / 2, width / 2 - border, 0, Math.PI * 2);
+			ctx.closePath();
+			ctx.clip(); // この範囲だけに画像を描画
+		}
+
+		// 画像の表示位置とサイズを計算
+		const imgW = image.width * scale;
+		const imgH = image.height * scale;
+		const x = width / 2 - imgW / 2 + offsetX;
+		const y = height / 2 - imgH / 2 + offsetY;
+		ctx.drawImage(image, x, y, imgW, imgH); // 画像を描画
+		ctx.restore(); // 保存した状態に戻す
+
+		// 枠線を描画
+		ctx.beginPath();
+		if (shape === "circle") {
+			ctx.arc(width / 2, height / 2, width / 2 - border / 2, 0, Math.PI * 2);
+		} else {
+			const pad = border / 2;
+			ctx.rect(pad, pad, width - pad * 2, height - pad * 2);
+		}
+		ctx.strokeStyle = borderColor.value; // 枠の色
+		ctx.lineWidth = border; // 枠の太さ
+		ctx.stroke();
+	}
+
+	// スライダーと数値入力を同期させる関数
+	function bindSliderAndNumber(rangeEl, numberEl, callback) {
+		rangeEl.addEventListener('input', () => {
+			numberEl.value = rangeEl.value;
+			callback(); // 値が変わったら再描画
+		});
+		numberEl.addEventListener('input', () => {
+			rangeEl.value = numberEl.value;
+			callback();
+		});
+	}
+
+	// 各入力の連動設定
+	bindSliderAndNumber(sizeRange, sizeNumber, draw);
+	bindSliderAndNumber(borderWidth, borderWidthNumber, draw);
+	bindSliderAndNumber(rectWidth, rectWidthNumber, draw);
+	bindSliderAndNumber(rectHeight, rectHeightNumber, draw);
+
+	// カラー選択：カラーピッカー → テキスト
+	borderColor.addEventListener('input', () => {
+		borderColorText.value = borderColor.value;
+		draw();
+	});
+
+	// カラー選択：テキスト → カラーピッカー
+	borderColorText.addEventListener('input', () => {
+		const val = borderColorText.value.trim();
+		const temp = document.createElement('div');
+		temp.style.color = '';
+		temp.style.color = val;
+
+		// 有効な色コードなら反映
+		if (temp.style.color !== '') {
+			borderColor.value = val;
+			draw();
+		}
+	});
+
+	// 形状が変わったとき、表示するUIを切り替える
+	shapeSelect.addEventListener('input', () => {
+		const shape = shapeSelect.value;
+		sizeRow.style.display = shape === 'circle' ? 'flex' : 'none';
+		widthRow.style.display = shape === 'rect' ? 'flex' : 'none';
+		heightRow.style.display = shape === 'rect' ? 'flex' : 'none';
+		draw();
+	});
+
+	// マウスでドラッグして画像を動かす処理
+	canvas.addEventListener('mousedown', (e) => {
+		dragging = true;
+		startX = e.offsetX;
+		startY = e.offsetY;
+		canvas.style.cursor = 'grabbing';
+	});
+	canvas.addEventListener('mouseup', () => { dragging = false; canvas.style.cursor = 'grab'; });
+	canvas.addEventListener('mouseleave', () => { dragging = false; canvas.style.cursor = 'grab'; });
+
+	canvas.addEventListener('mousemove', (e) => {
+		if (dragging && imageLoaded) {
+			offsetX += e.offsetX - startX;
+			offsetY += e.offsetY - startY;
+			startX = e.offsetX;
+			startY = e.offsetY;
+			draw();
+		}
+	});
+
+	// スマホでのタッチ対応（指で移動）
+	canvas.addEventListener('touchstart', (e) => {
+		const touch = e.touches[0];
+		const rect = canvas.getBoundingClientRect();
+		startX = touch.clientX - rect.left;
+		startY = touch.clientY - rect.top;
+		dragging = true;
+	});
+	canvas.addEventListener('touchmove', (e) => {
+		if (!dragging || !imageLoaded) return;
+		e.preventDefault(); // スクロール防止
+		const touch = e.touches[0];
+		const rect = canvas.getBoundingClientRect();
+		const moveX = touch.clientX - rect.left;
+		const moveY = touch.clientY - rect.top;
+		offsetX += moveX - startX;
+		offsetY += moveY - startY;
+		startX = moveX;
+		startY = moveY;
+		draw();
+	}, { passive: false });
+	canvas.addEventListener('touchend', () => { dragging = false; });
+
+	// マウスホイールで拡大・縮小
+	canvas.addEventListener('wheel', (e) => {
+		if (!imageLoaded) return;
+		e.preventDefault();
+		const scaleAmount = e.deltaY > 0 ? 0.95 : 1.05; // 上なら拡大、下なら縮小
+		scale *= scaleAmount;
+		draw();
+	});
+
+	// 保存ボタンを押したときの処理
+	downloadBtn.addEventListener('click', () => {
+		const format = formatSelect.value;
+		const link = document.createElement('a'); // ダウンロード用リンク
+		link.download = `${originalFileName}_trim.${format}`;
+
+		if (format === 'jpeg') {
+			// JPEGの場合、背景を白に塗ってから画像を描く
+			const tempCanvas = document.createElement('canvas');
+			tempCanvas.width = canvas.width;
+			tempCanvas.height = canvas.height;
+			const tempCtx = tempCanvas.getContext('2d');
+			tempCtx.fillStyle = '#fff';
+			tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+			tempCtx.drawImage(canvas, 0, 0);
+			link.href = tempCanvas.toDataURL('image/jpeg');
+		} else {
+			link.href = canvas.toDataURL('image/png');
+		}
+		link.click(); // 自動的に保存開始
+	});
+
+	// 初期状態の描画切り替えを実行
+	shapeSelect.dispatchEvent(new Event('input'));
+</script>
+
+</body>
+</html>
