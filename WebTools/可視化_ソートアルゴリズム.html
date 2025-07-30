@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ソートアルゴリズム可視化</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 10px;
+            min-width: 320px;
+        }
+        #array-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-end;
+            height: 300px;
+            margin: 10px;
+            gap: 10px;
+        }
+        .bar {
+            width: 12px;
+            margin: 0 1px;
+            background-color: #3498db;
+            transition: height 0.1s, background-color 0.1s;
+            color: #fff;
+            font-size: 8px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .pivot { background-color: #e74c3c; }
+        .comparing { background-color: #f1c40f; }
+        .sorted { background-color: #2ecc71; }
+        #controls {
+            margin: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+        }
+        button, select, input {
+            padding: 8px;
+            margin: 5px;
+            font-size: 14px;
+            touch-action: manipulation;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        #step-explanation {
+            max-width: 800px;
+            margin: 10px auto;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            text-align: left;
+            min-height: 50px;
+        }
+        #description {
+            max-width: 800px;
+            margin: 10px auto;
+            text-align: left;
+        }
+        #elapsed-time {
+            margin: 10px;
+            font-weight: bold;
+        }
+        label {
+            margin-left: 5px;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .bar { width: 8px; font-size: 6px; }
+            #array-container { height: 200px; }
+            button, select, input { font-size: 12px; padding: 6px; }
+            label { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <h1>ソートアルゴリズム可視化</h1>
+    <div id="controls">
+        <select id="algorithm-select">
+            <option value="quick">クイックソート</option>
+            <option value="bubble">バブルソート</option>
+            <option value="merge">マージソート</option>
+            <option value="insertion">インサートソート</option>
+            <option value="selection">セレクションソート</option>
+        </select>
+        <button id="generate-btn" onclick="generateArray()">新しい配列を生成</button>
+        <button id="action-btn" onclick="toggleAction()">ソート開始</button>
+        <br>
+        <label for="speed-slider">アニメーション速度: </label>
+        <input type="range" id="speed-slider" min="50" max="1000" value="200">
+        <span id="speed-value">200ms</span>
+        <br>
+        <label for="array-size">配列サイズ: </label>
+        <input type="number" id="array-size" min="5" max="50" value="20">
+        <label for="max-value">最大値: </label>
+        <input type="number" id="max-value" min="10" max="200" value="100">
+    </div>
+    <div id="elapsed-time">経過時間: 0秒</div>
+    <div id="array-container"></div>
+    <div id="step-explanation">ソートのステップがここに表示されます。</div>
+    <div id="description">
+        <h2 id="algo-title">クイックソートとは</h2>
+        <p id="algo-desc">クイックソートは、分割統治法に基づく効率的なソートアルゴリズムです。基準値（ピボット）を選択し、配列をピボットより小さい要素と大きい要素に分割します。このプロセスを再帰的に繰り返すことで、配列をソートします。平均時間計算量は O(n log n) です。</p>
+    </div>
+
+    <script>
+        let array = [];
+        let isSorting = false;
+        let isPaused = false;
+        let animationDelay = 200;
+        let startTime;
+        let comparisons = 0;
+        let swaps = 0;
+        const container = document.getElementById('array-container');
+        const stepExplanation = document.getElementById('step-explanation');
+        const algoSelect = document.getElementById('algorithm-select');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        const arraySizeInput = document.getElementById('array-size');
+        const maxValueInput = document.getElementById('max-value');
+        const algoTitle = document.getElementById('algo-title');
+        const algoDesc = document.getElementById('algo-desc');
+        const elapsedTimeDisplay = document.getElementById('elapsed-time');
+        const generateBtn = document.getElementById('generate-btn');
+        const actionBtn = document.getElementById('action-btn');
+
+        // アニメーション速度の更新
+        speedSlider.addEventListener('input', () => {
+            animationDelay = parseInt(speedSlider.value);
+            speedValue.textContent = `${animationDelay}ms`;
+        });
+
+        // アルゴリズム説明の更新
+        function updateDescription() {
+            const algo = algoSelect.value;
+            const descriptions = {
+                quick: ['クイックソートとは', 'クイックソートは、分割統治法に基づく効率的なソートアルゴリズムです。基準値（ピボット）を選択し、配列をピボットより小さい要素と大きい要素に分割します。このプロセスを再帰的に繰り返すことで、配列をソートします。平均時間計算量は O(n log n) です。'],
+                bubble: ['バブルソートとは', 'バブルソートは、隣接する要素を比較し、順序が逆であれば交換する単純なソートアルゴリズムです。このプロセスを配列全体がソートされるまで繰り返します。時間計算量は O(n2) です。'],
+                merge: ['マージソートとは', 'マージソートは、配列を半分に分割し、それぞれをソートした後、結合する分割統治法に基づくアルゴリズムです。安定ソートであり、時間計算量は O(n log n) です。'],
+                insertion: ['インサートソートとは', 'インサートソートは、未ソート部分から要素を取り出し、ソート済み部分の適切な位置に挿入するアルゴリズムです。時間計算量は O(n2) ですが、ほぼソート済みの配列に強いです。'],
+                selection: ['セレクションソートとは', 'セレクションソートは、未ソート部分から最小値を見つけ、ソート済み部分の末尾に追加するアルゴリズムです。時間計算量は O(n2) です。']
+            };
+            algoTitle.textContent = descriptions[algo][0];
+            algoDesc.textContent = descriptions[algo][1];
+        }
+        algoSelect.addEventListener('change', updateDescription);
+
+        // 経過時間表示の更新
+        function updateElapsedTime() {
+            if (isSorting && !isPaused) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                elapsedTimeDisplay.textContent = `経過時間: ${elapsed}秒`;
+                requestAnimationFrame(updateElapsedTime);
+            }
+        }
+
+        // 遅延処理（一時停止対応）
+        async function delay(ms) {
+            while (isPaused) await new Promise(resolve => setTimeout(resolve, 100));
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 配列を生成
+        function generateArray() {
+            if (isSorting) return;
+            const size = parseInt(arraySizeInput.value) || 20;
+            const maxValue = parseInt(maxValueInput.value) || 100;
+            array = Array.from({ length: Math.min(Math.max(size, 5), 50) }, () => Math.floor(Math.random() * maxValue) + 10);
+            renderArray();
+            stepExplanation.textContent = '新しい配列が生成されました。';
+            elapsedTimeDisplay.textContent = '経過時間: 0秒';
+        }
+
+        // 配列を棒グラフで表示
+        function renderArray(tempArray = array) {
+            container.innerHTML = '';
+            const maxHeight = 300;
+            const maxValue = Math.max(...tempArray, 10);
+            tempArray.forEach((value) => {
+                const bar = document.createElement('div');
+                bar.classList.add('bar');
+                bar.style.height = `${(value / maxValue) * maxHeight}px`;
+                bar.textContent = value;
+                container.appendChild(bar);
+            });
+        }
+
+        // カウンターのリセット
+        function resetCounters() {
+            comparisons = 0;
+            swaps = 0;
+            stepExplanation.textContent = 'カウンターをリセットしました。';
+        }
+
+        // クイックソート
+        async function quickSort(arr = array, start = 0, end = arr.length - 1) {
+            if (start >= end) return;
+            const pivotIndex = await partition(arr, start, end);
+            await quickSort(arr, start, pivotIndex - 1);
+            await quickSort(arr, pivotIndex + 1, end);
+        }
+
+        async function partition(arr, start, end) {
+            const pivotValue = arr[end];
+            container.children[end].classList.add('pivot');
+            stepExplanation.textContent = `ピボット(${pivotValue})を選択し、それより小さい要素を左に移動します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+            await delay(animationDelay);
+
+            let i = start - 1;
+            for (let j = start; j < end; j++) {
+                comparisons++;
+                container.children[j].classList.add('comparing');
+                stepExplanation.textContent = `要素${arr[j]}をピボット${pivotValue}と比較します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                await delay(animationDelay);
+
+                if (arr[j] <= pivotValue) {
+                    i++;
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                    swaps++;
+                    renderArray(arr);
+                    container.children[end].classList.add('pivot');
+                    stepExplanation.textContent = `要素${arr[j]}がピボット以下なので、位置${i}に移動。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                    await delay(animationDelay);
+                }
+                container.children[j].classList.remove('comparing');
+            }
+
+            [arr[i + 1], arr[end]] = [arr[end], arr[i + 1]];
+            swaps++;
+            renderArray(arr);
+            container.children[i + 1].classList.add('sorted');
+            stepExplanation.textContent = `ピボットを正しい位置(${i + 1})に移動しました。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+            container.children[end].classList.remove('pivot');
+            await delay(animationDelay);
+
+            return i + 1;
+        }
+
+        // バブルソート
+        async function bubbleSort(arr = array) {
+            for (let i = 0; i < arr.length; i++) {
+                for (let j = 0; j < arr.length - i - 1; j++) {
+                    comparisons++;
+                    container.children[j].classList.add('comparing');
+                    container.children[j + 1].classList.add('comparing');
+                    stepExplanation.textContent = `要素${arr[j]}と${arr[j + 1]}を比較します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                    await delay(animationDelay);
+
+                    if (arr[j] > arr[j + 1]) {
+                        [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+                        swaps++;
+                        renderArray(arr);
+                        stepExplanation.textContent = `要素${arr[j]}と${arr[j + 1]}を交換しました。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                        await delay(animationDelay);
+                    }
+
+                    container.children[j].classList.remove('comparing');
+                    container.children[j + 1].classList.remove('comparing');
+                }
+                container.children[arr.length - i - 1].classList.add('sorted');
+            }
+        }
+
+        // マージソート
+        async function mergeSort(arr = array, start = 0, end = arr.length - 1) {
+            if (start >= end) return;
+
+            const mid = Math.floor((start + end) / 2);
+            stepExplanation.textContent = `配列を${start}から${mid}と${mid + 1}から${end}に分割します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+            await delay(animationDelay);
+
+            await mergeSort(arr, start, mid);
+            await mergeSort(arr, mid + 1, end);
+            await merge(arr, start, mid, end);
+        }
+
+        async function merge(arr, start, mid, end) {
+            const left = arr.slice(start, mid + 1);
+            const right = arr.slice(mid + 1, end + 1);
+            stepExplanation.textContent = `部分配列[${left}]と[${right}]をマージします。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+            await delay(animationDelay);
+
+            let i = 0, j = 0, k = start;
+            while (i < left.length && j < right.length) {
+                comparisons++;
+                container.children[k].classList.add('comparing');
+                stepExplanation.textContent = `左:${left[i]}と右:${right[j]}を比較します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                await delay(animationDelay);
+
+                if (left[i] <= right[j]) {
+                    arr[k] = left[i];
+                    i++;
+                } else {
+                    arr[k] = right[j];
+                    j++;
+                    swaps++;
+                }
+                renderArray(arr);
+                container.children[k].classList.add('sorted');
+                await delay(animationDelay);
+                container.children[k].classList.remove('comparing');
+                k++;
+            }
+
+            while (i < left.length) {
+                arr[k] = left[i];
+                renderArray(arr);
+                container.children[k].classList.add('sorted');
+                await delay(animationDelay);
+                i++;
+                k++;
+            }
+
+            while (j < right.length) {
+                arr[k] = right[j];
+                renderArray(arr);
+                container.children[k].classList.add('sorted');
+                await delay(animationDelay);
+                j++;
+                k++;
+            }
+        }
+
+        // インサートソート
+        async function insertionSort(arr = array) {
+            for (let i = 1; i < arr.length; i++) {
+                const key = arr[i];
+                let j = i - 1;
+                container.children[i].classList.add('comparing');
+                stepExplanation.textContent = `キー${key}を選択し、ソート済み部分に挿入します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                await delay(animationDelay);
+
+                while (j >= 0 && arr[j] > key) {
+                    comparisons++;
+                    container.children[j].classList.add('comparing');
+                    stepExplanation.textContent = `キー${key}を${arr[j]}と比較します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                    await delay(animationDelay);
+
+                    arr[j + 1] = arr[j];
+                    swaps++;
+                    renderArray(arr);
+                    container.children[i].classList.add('comparing');
+                    await delay(animationDelay);
+                    container.children[j].classList.remove('comparing');
+                    j--;
+                }
+                arr[j + 1] = key;
+                renderArray(arr);
+                container.children[j + 1].classList.add('sorted');
+                stepExplanation.textContent = `キー${key}を位置${j + 1}に挿入しました。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                await delay(animationDelay);
+                container.children[i].classList.remove('comparing');
+            }
+        }
+
+        // セレクションソート
+        async function selectionSort(arr = array) {
+            for (let i = 0; i < arr.length - 1; i++) {
+                let minIdx = i;
+                container.children[i].classList.add('comparing');
+                stepExplanation.textContent = `最小値を探します（現在: ${arr[i]}）。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                await delay(animationDelay);
+
+                for (let j = i + 1; j < arr.length; j++) {
+                    comparisons++;
+                    container.children[j].classList.add('comparing');
+                    stepExplanation.textContent = `要素${arr[j]}を現在の最小値${arr[minIdx]}と比較します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                    await delay(animationDelay);
+
+                    if (arr[j] < arr[minIdx]) {
+                        minIdx = j;
+                        container.children[minIdx].classList.add('pivot');
+                    }
+                    container.children[j].classList.remove('comparing');
+                }
+
+                if (minIdx !== i) {
+                    [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
+                    swaps++;
+                    renderArray(arr);
+                    stepExplanation.textContent = `最小値${arr[i]}を位置${i}に移動しました。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                    await delay(animationDelay);
+                }
+                container.children[i].classList.remove('comparing');
+                container.children[i].classList.add('sorted');
+                if (minIdx !== i) container.children[minIdx].classList.remove('pivot');
+            }
+            container.children[arr.length - 1].classList.add('sorted');
+        }
+
+        // ソート開始/一時停止/再開
+        async function toggleAction() {
+            if (!isSorting) {
+                // ソート開始
+                isSorting = true;
+                isPaused = false;
+                actionBtn.textContent = '一時停止';
+                generateBtn.disabled = true;
+                startTime = Date.now();
+                resetCounters();
+                updateElapsedTime();
+                stepExplanation.textContent = `${algoSelect.options[algoSelect.selectedIndex].text}を開始します。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                for (let i = 0; i < array.length; i++) {
+                    container.children[i].classList.remove('sorted', 'pivot', 'comparing');
+                }
+                const algo = algoSelect.value;
+                if (algo === 'quick') await quickSort();
+                else if (algo === 'bubble') await bubbleSort();
+                else if (algo === 'merge') await mergeSort();
+                else if (algo === 'insertion') await insertionSort();
+                else if (algo === 'selection') await selectionSort();
+                stepExplanation.textContent = `ソートが完了しました！比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                elapsedTimeDisplay.textContent = `経過時間: ${((Date.now() - startTime) / 1000).toFixed(2)}秒`;
+                isSorting = false;
+                actionBtn.textContent = 'ソート開始';
+                generateBtn.disabled = false;
+            } else {
+                // 一時停止/再開
+                isPaused = !isPaused;
+                actionBtn.textContent = isPaused ? '再開' : '一時停止';
+                stepExplanation.textContent = isPaused ? 'ソートを一時停止しました。' : `ソートを再開しました。比較回数: ${comparisons}, 交換回数: ${swaps}`;
+                if (!isPaused) updateElapsedTime();
+            }
+        }
+
+        // 初期化
+        generateArray();
+        updateDescription();
+    </script>
+</body>
+</html>

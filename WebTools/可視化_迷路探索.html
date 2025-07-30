@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迷路探索可視化</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 10px;
+            min-width: 320px;
+        }
+        #grid-container {
+            display: inline-block;
+            margin: 10px;
+        }
+        .grid {
+            display: grid;
+            gap: 1px;
+            background-color: #ddd;
+        }
+        .cell {
+            width: 20px;
+            height: 20px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            transition: background-color 0.1s;
+        }
+        .start { background-color: #2ecc71; }
+        .end { background-color: #e74c3c; }
+        .wall { background-color: #333; }
+        .visited { background-color: #3498db; }
+        .visited-back { background-color: #9b59b6; } /* 双方向BFSの逆方向用 */
+        .path { background-color: #f1c40f; }
+        #controls {
+            margin: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+        }
+        button, select, input {
+            padding: 8px;
+            margin: 5px;
+            font-size: 14px;
+            touch-action: manipulation;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        #step-explanation {
+            max-width: 800px;
+            margin: 10px auto;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            text-align: left;
+            min-height: 50px;
+        }
+        #description {
+            max-width: 800px;
+            margin: 10px auto;
+            text-align: left;
+        }
+        #elapsed-time {
+            margin: 10px;
+            font-weight: bold;
+        }
+        label {
+            margin-left: 5px;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .cell { width: 15px; height: 15px; }
+            button, select, input { font-size: 12px; padding: 6px; }
+            label { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <h1>迷路探索可視化</h1>
+    <div id="controls">
+        <select id="algorithm-select">
+            <option value="bfs">幅優先探索（BFS）</option>
+            <option value="dfs">深さ優先探索（DFS）</option>
+            <option value="astar">A*探索</option>
+            <option value="bidirectional">双方向BFS</option>
+        </select>
+        <select id="maze-algorithm">
+            <option value="dfs">DFS迷路生成</option>
+            <option value="prim">Prim迷路生成</option>
+        </select>
+        <button id="generate-btn" onclick="generateGrid()">新しい迷路を生成</button>
+        <button id="action-btn" onclick="toggleAction()">探索開始</button>
+        <button id="step-btn" onclick="stepAction()" disabled>次へ</button>
+        <br>
+        <label for="speed-slider">アニメーション速度: </label>
+        <input type="range" id="speed-slider" min="50" max="1000" value="50">
+        <span id="speed-value">50ms</span>
+        <br>
+        <label for="grid-size">グリッドサイズ（奇数）: </label>
+        <input type="number" id="grid-size" min="11" max="31" value="21">
+    </div>
+    <div id="elapsed-time">経過時間: 0秒, 探索ノード数: 0, 経路長: 0</div>
+    <div id="grid-container"></div>
+    <div id="step-explanation">探索のステップがここに表示されます。</div>
+    <div id="description">
+        <h2 id="algo-title">幅優先探索（BFS）とは</h2>
+        <p id="algo-desc">幅優先探索（BFS）は、迷路やグラフで始点から各ノードへの最短経路を探索するアルゴリズムです。キューを使用して、ノードを層ごとに探索し、等コストの移動（重み1）で最短経路を保証します。時間計算量は O(V + E) です（V: 頂点数, E: エッジ数）。</p>
+    </div>
+
+    <script>
+        let grid = [];
+        let rows, cols;
+        let start = { row: 1, col: 1 };
+        let end = { row: 0, col: 0 };
+        let isSearching = false;
+        let isPaused = false;
+        let isStepping = false;
+        let animationDelay = 50;
+        let startTime;
+        let visitedCount = 0;
+        let pathLength = 0;
+        const container = document.getElementById('grid-container');
+        const stepExplanation = document.getElementById('step-explanation');
+        const algoSelect = document.getElementById('algorithm-select');
+        const mazeSelect = document.getElementById('maze-algorithm');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        const gridSizeInput = document.getElementById('grid-size');
+        const elapsedTimeDisplay = document.getElementById('elapsed-time');
+        const generateBtn = document.getElementById('generate-btn');
+        const actionBtn = document.getElementById('action-btn');
+        const stepBtn = document.getElementById('step-btn');
+        let isDrawingWall = false;
+        let queue = [];
+        let stack = [];
+        let pq = null;
+        let visited = null;
+        let previous = null;
+
+        // アニメーション速度の更新
+        speedSlider.addEventListener('input', () => {
+            animationDelay = parseInt(speedSlider.value);
+            speedValue.textContent = `${animationDelay}ms`;
+        });
+
+        // アルゴリズム説明の更新
+        function updateDescription() {
+            const algo = algoSelect.value;
+            const descriptions = {
+                bfs: ['幅優先探索（BFS）とは', '幅優先探索（BFS）は、迷路やグラフで始点から各ノードへの最短経路を探索するアルゴリズムです。キューを使用して、ノードを層ごとに探索し、等コストの移動（重み1）で最短経路を保証します。時間計算量は O(V + E) です（V: 頂点数, E: エッジ数）。'],
+                dfs: ['深さ優先探索（DFS）とは', '深さ優先探索（DFS）は、迷路やグラフを深く掘り下げて探索するアルゴリズムです。スタックを使用して、可能な限り一方向を進み、行き止まりで戻ります。最短経路は保証しませんが、単純でメモリ効率が良いです。時間計算量は O(V + E) です。'],
+                astar: ['A*探索とは', 'A*探索は、ヒューリスティック（例: マンハッタン距離）を使用して効率的に最短経路を探索するアルゴリズムです。優先度キューを使用し、ゴールに向けた推定コストを考慮します。最短経路を保証し、時間計算量はヒューリスティックに依存します。'],
+                bidirectional: ['双方向BFSとは', '双方向BFSは、始点と終点から同時にBFSを実行し、交差地点で経路を構築するアルゴリズムです。最短経路を保証し、探索ノード数を削減します。時間計算量は O(V + E) ですが、実際の探索範囲は狭くなりやすいです。']
+            };
+            document.getElementById('algo-title').textContent = descriptions[algo][0];
+            document.getElementById('algo-desc').textContent = descriptions[algo][1];
+        }
+        algoSelect.addEventListener('change', updateDescription);
+
+        // 経過時間、探索ノード数、経路長の更新
+        function updateElapsedTime() {
+            if (isSearching && !isPaused) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                elapsedTimeDisplay.textContent = `経過時間: ${elapsed}秒, 探索ノード数: ${visitedCount}, 経路長: ${pathLength}`;
+                requestAnimationFrame(updateElapsedTime);
+            }
+        }
+
+        // 遅延処理（ステップ進行または一時停止対応）
+        async function delay(ms) {
+            if (isStepping) {
+                isPaused = true;
+                stepBtn.disabled = false;
+                return new Promise(resolve => {
+                    window.resolveStep = resolve;
+                });
+            }
+            while (isPaused) await new Promise(resolve => setTimeout(resolve, 100));
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 迷路を生成（DFSまたはPrim）
+        function generateGrid() {
+            if (isSearching) return;
+            rows = cols = parseInt(gridSizeInput.value) || 21;
+            rows = Math.min(Math.max(rows, 11), 31);
+            if (rows % 2 === 0) rows++; // 奇数に
+            cols = rows;
+            start = { row: 1, col: 1 };
+            end = { row: rows - 2, col: cols - 2 };
+            grid = Array.from({ length: rows }, () => Array(cols).fill('wall'));
+
+            if (mazeSelect.value === 'dfs') {
+                // DFS迷路生成
+                function carvePath(row, col) {
+                    grid[row][col] = 'empty';
+                    const directions = [
+                        { dr: -2, dc: 0 }, // 上
+                        { dr: 2, dc: 0 },  // 下
+                        { dr: 0, dc: -2 }, // 左
+                        { dr: 0, dc: 2 }   // 右
+                    ].sort(() => Math.random() - 0.5);
+
+                    for (const { dr, dc } of directions) {
+                        const nr = row + dr, nc = col + dc;
+                        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && grid[nr][nc] === 'wall') {
+                            grid[row + dr / 2][col + dc / 2] = 'empty';
+                            carvePath(nr, nc);
+                        }
+                    }
+                }
+                carvePath(1, 1);
+            } else {
+                // Prim迷路生成
+                const frontiers = [];
+                grid[1][1] = 'empty';
+                const addFrontier = (r, c) => {
+                    if (r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] === 'wall') {
+                        frontiers.push({ r, c });
+                    }
+                };
+                addFrontier(1 - 2, 1);
+                addFrontier(1 + 2, 1);
+                addFrontier(1, 1 - 2);
+                addFrontier(1, 1 + 2);
+
+                while (frontiers.length > 0) {
+                    const index = Math.floor(Math.random() * frontiers.length);
+                    const { r, c } = frontiers.splice(index, 1)[0];
+                    const neighbors = [
+                        { r: r - 2, c }, // 上
+                        { r: r + 2, c }, // 下
+                        { r, c: c - 2 }, // 左
+                        { r, c: c + 2 }  // 右
+                    ].filter(n => n.r >= 0 && n.r < rows && n.c >= 0 && n.c < cols && grid[n.r][n.c] === 'empty');
+                    if (neighbors.length > 0) {
+                        const { r: nr, c: nc } = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        grid[r][c] = 'empty';
+                        grid[(r + nr) / 2][(c + nc) / 2] = 'empty';
+                        addFrontier(r - 2, c);
+                        addFrontier(r + 2, c);
+                        addFrontier(r, c - 2);
+                        addFrontier(r, c + 2);
+                    }
+                }
+            }
+
+            grid[start.row][start.col] = 'start';
+            grid[end.row][end.col] = 'end';
+            renderGrid();
+            stepExplanation.textContent = `新しい迷路が${mazeSelect.options[mazeSelect.selectedIndex].text}で生成されました。クリックまたはタッチで壁を追加/解除できます。`;
+            elapsedTimeDisplay.textContent = '経過時間: 0秒, 探索ノード数: 0, 経路長: 0';
+        }
+
+        // グリッドを描画
+        function renderGrid() {
+            container.innerHTML = '';
+            const gridElement = document.createElement('div');
+            gridElement.classList.add('grid');
+            gridElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell', grid[i][j]);
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    gridElement.appendChild(cell);
+                }
+            }
+            container.appendChild(gridElement);
+
+            // 壁の配置イベント
+            gridElement.addEventListener('mousedown', (e) => {
+                if (isSearching) return;
+                isDrawingWall = true;
+                toggleWall(e);
+            });
+            gridElement.addEventListener('mousemove', toggleWall);
+            gridElement.addEventListener('mouseup', () => isDrawingWall = false);
+            gridElement.addEventListener('touchstart', (e) => {
+                if (isSearching) return;
+                isDrawingWall = true;
+                toggleWall(e);
+            });
+            gridElement.addEventListener('touchmove', toggleWall);
+            gridElement.addEventListener('touchend', () => isDrawingWall = false);
+        }
+
+        // 壁の配置/解除
+        function toggleWall(e) {
+            if (!isDrawingWall || isSearching) return;
+            e.preventDefault();
+            const cell = e.target.classList.contains('cell') ? e.target : e.target.closest('.cell');
+            if (!cell) return;
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            if (grid[row][col] === 'start' || grid[row][col] === 'end') return;
+            grid[row][col] = grid[row][col] === 'wall' ? 'empty' : 'wall';
+            renderGrid();
+            stepExplanation.textContent = `壁を${grid[row][col] === 'wall' ? '配置' : '解除'}しました（${row}, ${col}）。`;
+        }
+
+        // 幅優先探索（BFS）
+        async function bfs() {
+            queue = [{ row: start.row, col: start.col, dist: 0 }];
+            visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+            previous = Array.from({ length: rows }, () => Array(cols).fill(null));
+            visited[start.row][start.col] = true;
+            visitedCount = 0;
+
+            while (queue.length > 0) {
+                const { row, col, dist } = queue.shift();
+                if (row === end.row && col === end.col) {
+                    pathLength = dist;
+                    stepExplanation.textContent = `終点(${row}, ${col})に到達しました。経路長: ${pathLength}。経路を構築します。探索ノード数: ${visitedCount}`;
+                    renderGrid();
+                    await delay(animationDelay);
+                    await constructPath(previous);
+                    return;
+                }
+
+                grid[row][col] = 'visited';
+                visitedCount++;
+                stepExplanation.textContent = `ノード(${row}, ${col})を探索中。距離: ${dist}。探索ノード数: ${visitedCount}`;
+                renderGrid();
+                await delay(animationDelay);
+
+                const neighbors = [
+                    { r: row - 1, c: col }, // 上
+                    { r: row + 1, c: col }, // 下
+                    { r: row, c: col - 1 }, // 左
+                    { r: row, c: col + 1 }  // 右
+                ];
+
+                for (const { r, c } of neighbors) {
+                    if (r < 0 || r >= rows || c < 0 || c >= cols || grid[r][c] === 'wall' || visited[r][c]) continue;
+                    queue.push({ row: r, col: c, dist: dist + 1 });
+                    visited[r][c] = true;
+                    previous[r][c] = { row, col };
+                    stepExplanation.textContent = `ノード(${r}, ${c})をキューに追加。距離: ${dist + 1}。探索ノード数: ${visitedCount}`;
+                    await delay(animationDelay);
+                }
+            }
+            stepExplanation.textContent = `終点に到達できませんでした。探索ノード数: ${visitedCount}`;
+        }
+
+        // 深さ優先探索（DFS）
+        async function dfs() {
+            stack = [{ row: start.row, col: start.col, dist: 0 }];
+            visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+            previous = Array.from({ length: rows }, () => Array(cols).fill(null));
+            visited[start.row][start.col] = true;
+            visitedCount = 0;
+
+            while (stack.length > 0) {
+                const { row, col, dist } = stack.pop();
+                if (row === end.row && col === end.col) {
+                    pathLength = dist;
+                    stepExplanation.textContent = `終点(${row}, ${col})に到達しました。経路長: ${pathLength}。経路を構築します。探索ノード数: ${visitedCount}`;
+                    renderGrid();
+                    await delay(animationDelay);
+                    await constructPath(previous);
+                    return;
+                }
+
+                grid[row][col] = 'visited';
+                visitedCount++;
+                stepExplanation.textContent = `ノード(${row}, ${col})を探索中。距離: ${dist}。探索ノード数: ${visitedCount}`;
+                renderGrid();
+                await delay(animationDelay);
+
+                const neighbors = [
+                    { r: row - 1, c: col }, // 上
+                    { r: row + 1, c: col }, // 下
+                    { r: row, c: col - 1 }, // 左
+                    { r: row, c: col + 1 }  // 右
+                ].sort(() => Math.random() - 0.5);
+
+                for (const { r, c } of neighbors) {
+                    if (r < 0 || r >= rows || c < 0 || c >= cols || grid[r][c] === 'wall' || visited[r][c]) continue;
+                    stack.push({ row: r, col: c, dist: dist + 1 });
+                    visited[r][c] = true;
+                    previous[r][c] = { row, col };
+                    stepExplanation.textContent = `ノード(${r}, ${c})をスタックに追加。距離: ${dist + 1}。探索ノード数: ${visitedCount}`;
+                    await delay(animationDelay);
+                }
+            }
+            stepExplanation.textContent = `終点に到達できませんでした。探索ノード数: ${visitedCount}`;
+        }
+
+        // A*探索
+        async function astar() {
+            pq = new PriorityQueue();
+            const distances = Array.from({ length: rows }, () => Array(cols).fill(Infinity));
+            visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+            previous = Array.from({ length: rows }, () => Array(cols).fill(null));
+            distances[start.row][start.col] = 0;
+            pq.enqueue({ row: start.row, col: start.col, dist: 0, fScore: manhattanDistance(start.row, start.col) });
+            visitedCount = 0;
+
+            while (!pq.isEmpty()) {
+                const { row, col, dist } = pq.dequeue();
+                if (visited[row][col]) continue;
+                if (row === end.row && col === end.col) {
+                    pathLength = dist;
+                    stepExplanation.textContent = `終点(${row}, ${col})に到達しました。経路長: ${pathLength}。経路を構築します。探索ノード数: ${visitedCount}`;
+                    renderGrid();
+                    await delay(animationDelay);
+                    await constructPath(previous);
+                    return;
+                }
+
+                grid[row][col] = 'visited';
+                visitedCount++;
+                visited[row][col] = true;
+                stepExplanation.textContent = `ノード(${row}, ${col})を探索中。距離: ${dist}。探索ノード数: ${visitedCount}`;
+                renderGrid();
+                await delay(animationDelay);
+
+                const neighbors = [
+                    { r: row - 1, c: col }, // 上
+                    { r: row + 1, c: col }, // 下
+                    { r: row, c: col - 1 }, // 左
+                    { r: row, c: col + 1 }  // 右
+                ];
+
+                for (const { r, c } of neighbors) {
+                    if (r < 0 || r >= rows || c < 0 || c >= cols || grid[r][c] === 'wall' || visited[r][c]) continue;
+                    const newDist = distances[row][col] + 1;
+                    if (newDist < distances[r][c]) {
+                        distances[r][c] = newDist;
+                        previous[r][c] = { row, col };
+                        const fScore = newDist + manhattanDistance(r, c);
+                        pq.enqueue({ row: r, col: c, dist: newDist, fScore });
+                        stepExplanation.textContent = `ノード(${r}, ${c})を優先度キューに追加。fスコア: ${fScore}。探索ノード数: ${visitedCount}`;
+                        await delay(animationDelay);
+                    }
+                }
+            }
+            stepExplanation.textContent = `終点に到達できませんでした。探索ノード数: ${visitedCount}`;
+        }
+
+        // 双方向BFS
+        async function bidirectionalBFS() {
+            const forwardQueue = [{ row: start.row, col: start.col, dist: 0 }];
+            const backwardQueue = [{ row: end.row, col: end.col, dist: 0 }];
+            const forwardVisited = Array.from({ length: rows }, () => Array(cols).fill(false));
+            const backwardVisited = Array.from({ length: rows }, () => Array(cols).fill(false));
+            const forwardPrev = Array.from({ length: rows }, () => Array(cols).fill(null));
+            const backwardPrev = Array.from({ length: rows }, () => Array(cols).fill(null));
+            forwardVisited[start.row][start.col] = true;
+            backwardVisited[end.row][end.col] = true;
+            visitedCount = 0;
+            let intersection = null;
+
+            while (forwardQueue.length > 0 && backwardQueue.length > 0 && !intersection) {
+                // 順方向
+                if (forwardQueue.length > 0) {
+                    const { row, col, dist } = forwardQueue.shift();
+                    if (backwardVisited[row][col]) {
+                        intersection = { row, col, forwardDist: dist };
+                        break;
+                    }
+                    grid[row][col] = 'visited';
+                    visitedCount++;
+                    stepExplanation.textContent = `順方向: ノード(${row}, ${col})を探索中。距離: ${dist}。探索ノード数: ${visitedCount}`;
+                    renderGrid();
+                    await delay(animationDelay);
+
+                    const neighbors = [
+                        { r: row - 1, c: col }, // 上
+                        { r: row + 1, c: col }, // 下
+                        { r: row, c: col - 1 }, // 左
+                        { r: row, c: col + 1 }  // 右
+                    ];
+
+                    for (const { r, c } of neighbors) {
+                        if (r < 0 || r >= rows || c < 0 || c >= cols || grid[r][c] === 'wall' || forwardVisited[r][c]) continue;
+                        forwardQueue.push({ row: r, col: c, dist: dist + 1 });
+                        forwardVisited[r][c] = true;
+                        forwardPrev[r][c] = { row, col };
+                        stepExplanation.textContent = `順方向: ノード(${r}, ${c})をキューに追加。距離: ${dist + 1}。探索ノード数: ${visitedCount}`;
+                        await delay(animationDelay);
+                    }
+                }
+
+                // 逆方向
+                if (backwardQueue.length > 0) {
+                    const { row, col, dist } = backwardQueue.shift();
+                    if (forwardVisited[row][col]) {
+                        intersection = { row, col, backwardDist: dist };
+                        break;
+                    }
+                    grid[row][col] = 'visited-back';
+                    visitedCount++;
+                    stepExplanation.textContent = `逆方向: ノード(${row}, ${col})を探索中。距離: ${dist}。探索ノード数: ${visitedCount}`;
+                    renderGrid();
+                    await delay(animationDelay);
+
+                    const neighbors = [
+                        { r: row - 1, c: col }, // 上
+                        { r: row + 1, c: col }, // 下
+                        { r: row, c: col - 1 }, // 左
+                        { r: row, c: col + 1 }  // 右
+                    ];
+
+                    for (const { r, c } of neighbors) {
+                        if (r < 0 || r >= rows || c < 0 || c >= cols || grid[r][c] === 'wall' || backwardVisited[r][c]) continue;
+                        backwardQueue.push({ row: r, col: c, dist: dist + 1 });
+                        backwardVisited[r][c] = true;
+                        backwardPrev[r][c] = { row, col };
+                        stepExplanation.textContent = `逆方向: ノード(${r}, ${c})をキューに追加。距離: ${dist + 1}。探索ノード数: ${visitedCount}`;
+                        await delay(animationDelay);
+                    }
+                }
+            }
+
+            if (intersection) {
+                const { row, col, forwardDist, backwardDist } = intersection;
+                pathLength = (forwardDist || 0) + (backwardDist || 0);
+                stepExplanation.textContent = `交差地点(${row}, ${col})で合流。経路長: ${pathLength}。経路を構築します。探索ノード数: ${visitedCount}`;
+                renderGrid();
+                await delay(animationDelay);
+                await constructPathBidirectional(forwardPrev, backwardPrev, intersection);
+            } else {
+                stepExplanation.textContent = `終点に到達できませんでした。探索ノード数: ${visitedCount}`;
+            }
+        }
+
+        // マンハッタン距離（A*用）
+        function manhattanDistance(row, col) {
+            return Math.abs(row - end.row) + Math.abs(col - end.col);
+        }
+
+        // 優先度キュー（A*用）
+        class PriorityQueue {
+            constructor() {
+                this.items = [];
+            }
+            enqueue(item) {
+                this.items.push(item);
+                this.items.sort((a, b) => a.fScore - b.fScore);
+            }
+            dequeue() {
+                return this.items.shift();
+            }
+            isEmpty() {
+                return this.items.length === 0;
+            }
+        }
+
+        // 最短経路の構築（単方向）
+        async function constructPath(previous) {
+            let current = { row: end.row, col: end.col };
+            pathLength = 0;
+            const path = [];
+            while (current && !(current.row === start.row && current.col === start.col)) {
+                path.push(current);
+                current = previous[current.row][current.col];
+                pathLength++;
+            }
+            for (const { row, col } of path.reverse()) {
+                grid[row][col] = 'path';
+                stepExplanation.textContent = `経路を(${row}, ${col})に追加。経路長: ${pathLength}。探索ノード数: ${visitedCount}`;
+                renderGrid();
+                await delay(animationDelay);
+            }
+            grid[start.row][start.col] = 'start';
+            renderGrid();
+        }
+
+        // 最短経路の構築（双方向BFS用）
+        async function constructPathBidirectional(forwardPrev, backwardPrev, intersection) {
+            let current = { row: intersection.row, col: intersection.col };
+            pathLength = 0;
+            const path = [];
+
+            // 順方向経路
+            while (current && !(current.row === start.row && current.col === start.col)) {
+                path.push(current);
+                current = forwardPrev[current.row][current.col];
+                if (current) pathLength++;
+            }
+            // 逆方向経路
+            current = backwardPrev[intersection.row][intersection.col];
+            while (current && !(current.row === end.row && current.col === end.col)) {
+                path.push(current);
+                current = backwardPrev[current.row][current.col];
+                if (current) pathLength++;
+            }
+            path.push({ row: intersection.row, col: intersection.col });
+
+            for (const { row, col } of path.reverse()) {
+                grid[row][col] = 'path';
+                stepExplanation.textContent = `経路を(${row}, ${col})に追加。経路長: ${pathLength}。探索ノード数: ${visitedCount}`;
+                renderGrid();
+                await delay(animationDelay);
+            }
+            grid[start.row][start.col] = 'start';
+            grid[end.row][end.col] = 'end';
+            renderGrid();
+        }
+
+        // 探索開始/一時停止/再開
+        async function toggleAction() {
+            if (!isSearching) {
+                // 探索開始
+                isSearching = true;
+                isPaused = false;
+                isStepping = false;
+                actionBtn.textContent = '一時停止';
+                stepBtn.disabled = true;
+                generateBtn.disabled = true;
+                mazeSelect.disabled = true;
+                startTime = Date.now();
+                visitedCount = 0;
+                pathLength = 0;
+                updateElapsedTime();
+                stepExplanation.textContent = `${algoSelect.options[algoSelect.selectedIndex].text}を開始します。探索ノード数: 0`;
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        if (grid[i][j] !== 'start' && grid[i][j] !== 'end' && grid[i][j] !== 'wall') {
+                            grid[i][j] = 'empty';
+                        }
+                    }
+                }
+                renderGrid();
+                const algo = algoSelect.value;
+                if (algo === 'bfs') await bfs();
+                else if (algo === 'dfs') await dfs();
+                else if (algo === 'astar') await astar();
+                else if (algo === 'bidirectional') await bidirectionalBFS();
+                stepExplanation.textContent = `探索が完了しました！経過時間: ${((Date.now() - startTime) / 1000).toFixed(2)}秒, 探索ノード数: ${visitedCount}, 経路長: ${pathLength}`;
+                isSearching = false;
+                actionBtn.textContent = '探索開始';
+                stepBtn.disabled = true;
+                generateBtn.disabled = false;
+                mazeSelect.disabled = false;
+            } else {
+                // 一時停止/再開
+                isPaused = !isPaused;
+                isStepping = false;
+                actionBtn.textContent = isPaused ? '再開' : '一時停止';
+                stepBtn.disabled = !isPaused;
+                stepExplanation.textContent = isPaused ? '探索を一時停止しました。' : `探索を再開しました。探索ノード数: ${visitedCount}`;
+                if (!isPaused) updateElapsedTime();
+            }
+        }
+
+        // ステップごとの進行
+        function stepAction() {
+            if (!isPaused || !isSearching) return;
+            isStepping = true;
+            stepBtn.disabled = true;
+            window.resolveStep();
+        }
+
+        // 初期化
+        generateGrid();
+        updateDescription();
+    </script>
+</body>
+</html>
