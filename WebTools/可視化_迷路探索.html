@@ -99,11 +99,11 @@
         <button id="step-btn" onclick="stepAction()" disabled>次へ</button>
         <br>
         <label for="speed-slider">アニメーション速度: </label>
-        <input type="range" id="speed-slider" min="50" max="1000" value="50">
+        <input type="range" id="speed-slider" min="10" max="1000" value="50">
         <span id="speed-value">50ms</span>
         <br>
         <label for="grid-size">グリッドサイズ（奇数）: </label>
-        <input type="number" id="grid-size" min="11" max="31" value="21">
+        <input type="number" id="grid-size" min="11" max="99" value="21">
     </div>
     <div id="elapsed-time">経過時間: 0秒, 探索ノード数: 0, 経路長: 0</div>
     <div id="grid-container"></div>
@@ -189,7 +189,7 @@
         function generateGrid() {
             if (isSearching) return;
             rows = cols = parseInt(gridSizeInput.value) || 21;
-            rows = Math.min(Math.max(rows, 11), 31);
+            rows = Math.min(Math.max(rows, 11), 99);
             if (rows % 2 === 0) rows++; // 奇数に
             cols = rows;
             start = { row: 1, col: 1 };

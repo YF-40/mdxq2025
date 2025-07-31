@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オセロ</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        #gameBoard {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            grid-template-rows: repeat(8, 50px);
+            gap: 2px;
+            background: green;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background: #228B22;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .cell:hover {
+            background: #2e9c2e;
+        }
+        .black {
+            width: 80%;
+            height: 80%;
+            background: black;
+            border-radius: 50%;
+        }
+        .white {
+            width: 80%;
+            height: 80%;
+            background: white;
+            border-radius: 50%;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        #score {
+            margin-top: 10px;
+            font-size: 1em;
+        }
+        #resetButton {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>オセロ</h1>
+    <div id="gameBoard"></div>
+    <div id="status">現在のターン: 黒 (プレイヤー)</div>
+    <div id="score">黒: 2 | 白: 2</div>
+    <button id="resetButton">リセット</button>
+    <script>
+        const board = [];
+        const size = 8;
+        let currentPlayer = 'black';
+        let gameOver = false;
+
+        // ボードの初期化
+        function initBoard() {
+            console.log('Initializing board...');
+            const gameBoard = document.getElementById('gameBoard');
+            if (!gameBoard) {
+                console.error('gameBoard element not found');
+                return;
+            }
+            gameBoard.innerHTML = '';
+            board.length = 0;
+            for (let i = 0; i < size; i++) {
+                board[i] = [];
+                for (let j = 0; j < size; j++) {
+                    board[i][j] = null;
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.addEventListener('click', handleCellClick);
+                    gameBoard.appendChild(cell);
+                }
+            }
+            // 初期配置
+            board[3][3] = 'white';
+            board[3][4] = 'black';
+            board[4][3] = 'black';
+            board[4][4] = 'white';
+            updateBoard();
+            updateScore();
+            console.log('Board initialized:', board);
+        }
+
+        // ボードの更新
+        function updateBoard() {
+            console.log('Updating board...');
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    const cell = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+                    if (!cell) {
+                        console.error(`Cell at row ${i}, col ${j} not found`);
+                        continue;
+                    }
+                    cell.innerHTML = ''; // 子要素をクリア
+                    cell.className = 'cell';
+                    if (board[i][j] === 'black') {
+                        const disk = document.createElement('div');
+                        disk.classList.add('black');
+                        cell.appendChild(disk);
+                    } else if (board[i][j] === 'white') {
+                        const disk = document.createElement('div');
+                        disk.classList.add('white');
+                        cell.appendChild(disk);
+                    }
+                }
+            }
+            document.getElementById('status').textContent = `現在のターン: ${currentPlayer === 'black' ? '黒 (プレイヤー)' : '白 (CPU)'}`;
+        }
+
+        // スコアの更新
+        function updateScore() {
+            let blackCount = 0, whiteCount = 0;
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    if (board[i][j] === 'black') blackCount++;
+                    if (board[i][j] === 'white') whiteCount++;
+                }
+            }
+            document.getElementById('score').textContent = `黒: ${blackCount} | 白: ${whiteCount}`;
+            if (blackCount + whiteCount === size * size || (!hasValidMove('black') && !hasValidMove('white'))) {
+                gameOver = true;
+                const winner = blackCount > whiteCount ? '黒 (プレイヤー)' : whiteCount > blackCount ? '白 (CPU)' : '引き分け';
+                document.getElementById('status').textContent = `ゲーム終了！ 勝者: ${winner}`;
+            }
+        }
+
+        // 有効な手の取得
+        function getValidMoves(player) {
+            const moves = [];
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    if (board[i][j] === null && getFlippableDisks(i, j, player).length > 0) {
+                        moves.push([i, j]);
+                    }
+                }
+            }
+            return moves;
+        }
+
+        // 有効な手があるかチェック
+        function hasValidMove(player) {
+            return getValidMoves(player).length > 0;
+        }
+
+        // セルクリックの処理（プレイヤーのみ）
+        function handleCellClick(e) {
+            if (gameOver || currentPlayer !== 'black') return;
+
+            // クリックされた要素がセル（div.cell）であることを確認
+            let target = e.target;
+            if (!target.classList.contains('cell')) {
+                target = target.closest('.cell');
+            }
+            if (!target) {
+                console.error('Clicked element is not a cell or within a cell');
+                return;
+            }
+
+            const row = parseInt(target.dataset.row);
+            const col = parseInt(target.dataset.col);
+
+            // row と col が正しく取得できたか確認
+            if (isNaN(row) || isNaN(col)) {
+                console.error(`Invalid row or col: row=${row}, col=${col}`);
+                return;
+            }
+
+            console.log(`Clicked cell: row=${row}, col=${col}`);
+
+            // セルが空かチェック
+            if (board[row][col] !== null) {
+                console.log(`Cell at row=${row}, col=${col} is not empty`);
+                return;
+            }
+
+            // 有効な手かチェック
+            const flippable = getFlippableDisks(row, col, currentPlayer);
+            console.log(`Flippable disks:`, flippable);
+            if (flippable.length > 0) {
+                board[row][col] = currentPlayer;
+                flippable.forEach(([r, c]) => board[r][c] = currentPlayer);
+                updateBoard();
+                updateScore();
+                currentPlayer = 'white';
+                if (!gameOver) setTimeout(cpuMove, 500);
+            } else {
+                console.log(`No flippable disks at row=${row}, col=${col}`);
+            }
+        }
+
+        // CPUの手（ランダム）
+        function cpuMove() {
+            if (gameOver || currentPlayer !== 'white') return;
+            const validMoves = getValidMoves('white');
+            if (validMoves.length === 0) {
+                currentPlayer = 'black';
+                document.getElementById('status').textContent = `白 (CPU) に有効な手がないため、黒 (プレイヤー) のターン`;
+                updateBoard();
+                return;
+            }
+            const [row, col] = validMoves[Math.floor(Math.random() * validMoves.length)];
+            const flippable = getFlippableDisks(row, col, 'white');
+            board[row][col] = 'white';
+            flippable.forEach(([r, c]) => board[r][c] = 'white');
+            updateBoard();
+            updateScore();
+            currentPlayer = 'black';
+            if (!hasValidMove('black') && !gameOver) {
+                currentPlayer = 'white';
+                document.getElementById('status').textContent = `黒 (プレイヤー) に有効な手がないため、白 (CPU) のターン`;
+                setTimeout(cpuMove, 500);
+            }
+        }
+
+        // ひっくり返せる石の取得
+        function getFlippableDisks(row, col, player) {
+            const directions = [
+                [-1, 0], [1, 0], [0, -1], [0, 1],
+                [-1, -1], [-1, 1], [1, -1], [1, 1]
+            ];
+            const opponent = player === 'black' ? 'white' : 'black';
+            let flippable = [];
+
+            directions.forEach(([dr, dc]) => {
+                let r = row + dr, c = col + dc;
+                let tempFlippable = [];
+                while (r >= 0 && r < size && c >= 0 && c < size && board[r][c] === opponent) {
+                    tempFlippable.push([r, c]);
+                    r += dr;
+                    c += dc;
+                }
+                if (r >= 0 && r < size && c >= 0 && c < size && board[r][c] === player) {
+                    flippable = flippable.concat(tempFlippable);
+                }
+            });
+            return flippable;
+        }
+
+        // リセットボタンの処理
+        document.getElementById('resetButton').addEventListener('click', () => {
+            currentPlayer = 'black';
+            gameOver = false;
+            initBoard();
+        });
+
+        // ゲーム開始
+        try {
+            initBoard();
+        } catch (e) {
+            console.error('Error initializing game:', e);
+        }
+    </script>
+</body>
+</html>
