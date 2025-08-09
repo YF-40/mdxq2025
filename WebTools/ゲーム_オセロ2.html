@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>オセロ (HTML/CSS/JS)</title>
+<style>
+    body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background:#2e7d32;
+        color:#fff;
+        text-align:center;
+        margin:0;
+        padding:20px;
+    }
+    h1 {margin-bottom:5px;}
+    #score {font-size:1.2rem; margin:10px 0;}
+    #board {
+        display:grid;
+        grid-template-columns: repeat(8, 50px);
+        grid-template-rows   : repeat(8, 50px);
+        gap:2px;
+        justify-content:center;
+        background:#006400;
+        padding:4px;
+        border-radius:6px;
+    }
+    .cell {
+        width:50px; height:50px;
+        background:#009688;
+        position:relative;
+        cursor:pointer;
+    }
+    .cell.invalid {cursor:not-allowed;}
+    .disc {
+        width:40px; height:40px;
+        border-radius:50%;
+        position:absolute;
+        top:5px; left:5px;
+    }
+    .black  {background:#000;}
+    .white  {background:#fff;}
+    #resetBtn{
+        margin-top:15px;
+        padding:8px 16px;
+        font-size:1rem;
+        background:#ff9800;
+        border:none;
+        border-radius:4px;
+        cursor:pointer;
+    }
+</style>
+</head>
+<body>
+
+<h1>オセロ (対CPU)</h1>
+<div id="score">黒: 2 | 白: 2</div>
+<div id="board"></div>
+<button id="resetBtn">リセット</button>
+
+<script>
+// ---------------------- 定数・変数 ----------------------
+const SIZE = 8;
+const EMPTY = 0, BLACK = 1, WHITE = -1;   // 黒＝プレイヤー、白＝CPU
+let board = [];          // 2次元配列 (SIZE x SIZE)
+let currentPlayer = BLACK; // 手番（最初は黒＝人間）
+
+// ---------------------- 初期化 ----------------------
+function initBoard() {
+    board = Array.from({length: SIZE}, () => Array(SIZE).fill(EMPTY));
+    const mid = SIZE/2;
+    board[mid-1][mid-1] = WHITE;
+    board[mid][mid]     = WHITE;
+    board[mid-1][mid]   = BLACK;
+    board[mid][mid-1]   = BLACK;
+    currentPlayer = BLACK;
+    render();
+}
+document.getElementById('resetBtn').addEventListener('click', initBoard);
+
+// ---------------------- 盤面描画 ----------------------
+function render() {
+    const boardDiv = document.getElementById('board');
+    boardDiv.innerHTML = '';
+    for (let y=0; y<SIZE; y++) {
+        for (let x=0; x<SIZE; x++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            // クリックハンドラは黒(プレイヤー)の手番だけ有効
+            if (currentPlayer === BLACK && board[y][x]===EMPTY && canPlace(x,y,BLACK).length>0){
+                cell.addEventListener('click', ()=>humanTurn(x,y));
+            } else {
+                cell.classList.add('invalid');
+            }
+
+            // 駒がある場合は描画
+            if (board[y][x] !== EMPTY) {
+                const disc = document.createElement('div');
+                disc.className = 'disc ' + (board[y][x]===BLACK?'black':'white');
+                cell.appendChild(disc);
+            }
+            boardDiv.appendChild(cell);
+        }
+    }
+    updateScore();
+}
+
+// ---------------------- スコア表示 ----------------------
+function updateScore(){
+    let black=0, white=0;
+    for(let row of board){
+        for(let v of row){
+            if(v===BLACK) black++;
+            else if(v===WHITE) white++;
+        }
+    }
+    document.getElementById('score').textContent = `黒: ${black} | 白: ${white}`;
+}
+
+// ---------------------- 方向ベクトル ----------------------
+const dirs = [
+    [0,1],[1,0],[0,-1],[-1,0],
+    [1,1],[1,-1],[-1,1],[-1,-1]
+];
+
+// ---------------------- 手が置けるか判定 & 裏返す座標取得 ----------------------
+function canPlace(x,y,color){
+    if(board[y][x] !== EMPTY) return [];
+    const toFlip = [];
+
+    for(const [dx,dy] of dirs){
+        let nx=x+dx, ny=y+dy;
+        const line=[];
+        while(nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && board[ny][nx]===-color){
+            line.push([nx,ny]);
+            nx+=dx; ny+=dy;
+        }
+        if(line.length>0 && nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && board[ny][nx]===color){
+            toFlip.push(...line);
+        }
+    }
+    return toFlip;
+}
+
+// ---------------------- 人間の手番 ----------------------
+function humanTurn(x,y){
+    const flips = canPlace(x,y,BLACK);
+    if(flips.length===0) return; // 不正手は無視
+    board[y][x] = BLACK;
+    for(const [fx,fy] of flips) board[fy][fx]=BLACK;
+    currentPlayer = WHITE;
+    render();
+    setTimeout(cpuTurn, 300); // 少し待ってからCPUへ
+}
+
+// ---------------------- CPU の手番（簡易AI） ----------------------
+function cpuTurn(){
+    const moves = [];
+    for(let y=0; y<SIZE; y++){
+        for(let x=0; x<SIZE; x++){
+            const flips = canPlace(x,y,WHITE);
+            if(flips.length>0){
+                moves.push({x,y,flips});
+            }
+        }
+    }
+
+    // 手が無い場合はパス
+    if(moves.length===0){
+        currentPlayer = BLACK;
+        render();
+        checkGameEnd();
+        return;
+    }
+
+    // もっとも多く裏返せる手を選択（シンプルな評価関数）
+    moves.sort((a,b)=>b.flips.length - a.flips.length);
+    const best = moves[0];
+
+    board[best.y][best.x] = WHITE;
+    for(const [fx,fy] of best.flips) board[fy][fx]=WHITE;
+
+    currentPlayer = BLACK;
+    render();
+    // 人間が置けない場合は再度CPUターンへ
+    if(!hasLegalMove(BLACK)){
+        setTimeout(cpuTurn, 300);
+    } else {
+        checkGameEnd();
+    }
+}
+
+// ---------------------- 手番があるかチェック ----------------------
+function hasLegalMove(color){
+    for(let y=0; y<SIZE; y++){
+        for(let x=0; x<SIZE; x++){
+            if(canPlace(x,y,color).length>0) return true;
+        }
+    }
+    return false;
+}
+
+// ---------------------- 終了判定 ----------------------
+function checkGameEnd(){
+    const blackCan = hasLegalMove(BLACK);
+    const whiteCan = hasLegalMove(WHITE);
+    if(!blackCan && !whiteCan){
+        // 両者とも置けない → ゲーム終了
+        let black=0, white=0;
+        for(let row of board){
+            for(let v of row){
+                if(v===BLACK) black++;
+                else if(v===WHITE) white++;
+            }
+        }
+        let msg = `ゲーム終了！ 黒 ${black} - 白 ${white}\n`;
+        if(black>white) msg += 'あなたの勝ちです 🎉';
+        else if(black<white) msg += 'CPU の勝ちです 😢';
+        else msg += '引き分けです 🤝';
+        alert(msg);
+    }
+}
+
+// ---------------------- 起動 ----------------------
+initBoard();
+</script>
+
+</body>
+</html>
