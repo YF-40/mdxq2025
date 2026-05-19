@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MosaicMate README</title>
+<style>
+  :root{
+    --bg:#f3f6f8;
+    --panel:#ffffff;
+    --text:#172033;
+    --muted:#667085;
+    --line:#d8e0e8;
+    --primary:#0f766e;
+    --primary-dark:#0b5f59;
+    --code:#0f172a;
+    --shadow:0 10px 26px rgba(15,23,42,.09);
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Meiryo",sans-serif;
+    line-height:1.75;
+  }
+  header{
+    background:linear-gradient(90deg,#047857,#0f766e);
+    color:#fff;
+    padding:26px 22px;
+    box-shadow:var(--shadow);
+  }
+  header h1{margin:0;font-size:30px;letter-spacing:.02em}
+  header p{margin:8px 0 0;color:#e7fff8}
+  main{max-width:1060px;margin:0 auto;padding:22px}
+  section{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:22px;
+    margin:0 0 18px;
+  }
+  h2{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 14px}
+  h3{font-size:18px;margin:20px 0 8px}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff}
+  th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top}
+  th{background:#e6f4f1;text-align:left;color:#064e3b}
+  code{background:#eef2f7;border:1px solid #dde5ef;border-radius:6px;padding:2px 6px}
+  pre{background:var(--code);color:#e5e7eb;border-radius:12px;padding:14px;overflow:auto}
+  pre code{background:transparent;border:0;padding:0;color:inherit}
+  .lead{font-size:16px;color:#334155}
+  .note{background:#fffbeb;border:1px solid #fcd34d;color:#78350f;border-radius:12px;padding:12px}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .card{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:14px}
+  ul,ol{padding-left:1.4em}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}main{padding:14px}header h1{font-size:24px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>MosaicMate README</h1>
+  <p>画像の一部を、ぼかし・モザイク・黒塗り・スタンプなどで加工するローカルツール</p>
+</header>
+
+<main>
+  <section>
+    <h2>1. 概要</h2>
+    <p class="lead"><strong>MosaicMate</strong> は、画像の一部を手軽に隠したり、強調したりするためのローカル画像加工ツールです。</p>
+    <p>HTML / CSS / JavaScript の <strong>1ファイル完結アプリ</strong>として動作します。個人情報、顔、メールアドレス、住所、画面キャプチャ内の不要部分などを加工できます。</p>
+  </section>
+
+  <section>
+    <h2>2. 主な特徴</h2>
+    <div class="grid">
+      <div class="card">ブラウザだけで動作し、インストール不要</div>
+      <div class="card">画像はローカルで処理</div>
+      <div class="card">画像選択、D&amp;D、Ctrl+V貼り付けに対応</div>
+      <div class="card">範囲指定をマウス操作と数値入力で調整可能</div>
+      <div class="card">Ctrl + Z で元に戻す</div>
+      <div class="card">Ctrl + ドラッグ / Ctrl + ホイールで表示操作</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. 対応している加工モード</h2>
+    <table>
+      <thead><tr><th>加工モード</th><th>説明</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td>ぼかし</td><td>指定範囲をぼかします</td><td>顔、氏名、住所などを自然に隠す</td></tr>
+        <tr><td>モザイク</td><td>指定範囲をブロック状に荒くします</td><td>顔、個人情報、画面の一部を隠す</td></tr>
+        <tr><td>黒塗り</td><td>指定範囲を黒で塗りつぶします</td><td>確実に読めないようにする</td></tr>
+        <tr><td>白塗り</td><td>指定範囲を白で塗りつぶします</td><td>書類や画面キャプチャの不要部分削除</td></tr>
+        <tr><td>半透明塗り</td><td>指定範囲を半透明色で覆います</td><td>隠しつつ背景を少し残す</td></tr>
+        <tr><td>枠線</td><td>指定範囲に枠線を描きます</td><td>注目箇所の強調</td></tr>
+        <tr><td>斜線</td><td>指定範囲に斜線を描きます</td><td>マスク済み表現、注意喚起</td></tr>
+        <tr><td>グレースケール</td><td>指定範囲を白黒化します</td><td>重要でない部分を弱める</td></tr>
+        <tr><td>ノイズ</td><td>指定範囲にノイズを加えます</td><td>内容を読みにくくする</td></tr>
+        <tr><td>絵文字スタンプ</td><td>絵文字をスタンプとして配置します</td><td>顔隠し、注釈、目印</td></tr>
+        <tr><td>顔文字スタンプ</td><td>顔文字をスタンプとして配置します</td><td>軽い雰囲気の顔隠し、注釈</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>4. 使い方</h2>
+    <h3>4.1 画像を読み込む</h3>
+    <ol>
+      <li>「画像を選択 または D&amp;D」をクリックして画像を選択</li>
+      <li>画像ファイルをドラッグ&amp;ドロップ</li>
+      <li>クリップボードに画像をコピーして <strong>Ctrl + V</strong></li>
+      <li>「クリップボードから貼付」ボタンをクリック</li>
+    </ol>
+
+    <h3>4.2 範囲加工</h3>
+    <ol>
+      <li>加工モードを選択します。</li>
+      <li>画像上で加工したい範囲をドラッグします。</li>
+      <li>必要に応じて、X / Y / 幅 / 高さの数値を修正します。</li>
+      <li>効果ごとのスライダーを調整します。</li>
+      <li>「選択範囲に適用」をクリックします。</li>
+    </ol>
+
+    <h3>4.3 スタンプ</h3>
+    <ol>
+      <li>「絵文字スタンプ」または「顔文字スタンプ」を選択します。</li>
+      <li>プリセットからスタンプを選ぶか、入力欄に好きな文字を入力します。</li>
+      <li>スタンプサイズ、回転、透明度を調整します。</li>
+      <li>画像上をクリックすると、その位置にスタンプが配置されます。</li>
+    </ol>
+    <p class="note">Windows では <strong>Win + .</strong> で絵文字入力パネルを開けます。</p>
+  </section>
+
+  <section>
+    <h2>5. 便利な操作</h2>
+    <table>
+      <thead><tr><th>操作</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>Ctrl + Z</td><td>1つ前の加工に戻す</td></tr>
+        <tr><td>Command + Z</td><td>Mac系ブラウザで1つ前の加工に戻す</td></tr>
+        <tr><td>Ctrl + マウスドラッグ</td><td>画像表示位置を移動</td></tr>
+        <tr><td>Ctrl + マウスホイール</td><td>画像を拡大・縮小</td></tr>
+        <tr><td>100%</td><td>画像を100%表示に戻し、画像左上を表示部左上に合わせる</td></tr>
+        <tr><td>表示サイズ調整</td><td>画像全体が見えるように表示倍率を調整</td></tr>
+        <tr><td>PNG保存</td><td>加工後の画像をPNG形式で保存</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>6. 画面構成</h2>
+    <table>
+      <thead><tr><th>場所</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td>画面上部</td><td>アプリ名を表示します</td></tr>
+        <tr><td>左側：操作パネル</td><td>画像読み込み、加工モード、範囲指定、各種設定を操作します</td></tr>
+        <tr><td>右側：画像表示エリア</td><td>読み込んだ画像を表示し、範囲選択やスタンプ配置を行います</td></tr>
+        <tr><td>右上ツールバー</td><td>拡大縮小、100%表示、表示サイズ調整を行います</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>7. ファイル構成</h2>
+    <p>MosaicMate は基本的に以下の1ファイルで動作します。</p>
+    <pre><code>mosaicmate_commented.html</code></pre>
+    <p>このHTMLファイルの中に、HTML / CSS / JavaScript がすべて含まれています。</p>
+  </section>
+
+  <section>
+    <h2>8. 修正しやすいポイント</h2>
+    <h3>HTML</h3>
+    <p>画面の場所ごとにコメントを入れています。</p>
+    <pre><code>&lt;!-- HTML：画像読み込みエリア --&gt;
+&lt;!-- HTML：加工モード選択 --&gt;
+&lt;!-- HTML：画像表示エリア --&gt;</code></pre>
+
+    <h3>CSS</h3>
+    <p>どの画面部品の見た目を担当しているかをコメントしています。</p>
+    <pre><code>/* CSS：画面上部のアプリ名ヘッダー */
+/* CSS：左側の操作パネル */
+/* CSS：画像表示エリア */</code></pre>
+
+    <h3>JavaScript</h3>
+    <p>機能ごとにコメントを入れています。</p>
+    <pre><code>// 画像ファイル選択、ドラッグ&amp;ドロップ、Ctrl+V貼り付けに対応します。
+// マウスで選択した範囲を数値入力欄に反映します。
+// Ctrl+Z / Cmd+Z で「元に戻す」を実行します。</code></pre>
+  </section>
+
+  <section>
+    <h2>9. 注意事項</h2>
+    <ul>
+      <li>画像処理はブラウザ上で行います。</li>
+      <li>大きすぎる画像では、ブラウザの動作が重くなる場合があります。</li>
+      <li>クリップボード画像の読み取りは、ブラウザや権限設定によって動作が異なる場合があります。</li>
+      <li>保存形式はPNGです。</li>
+      <li>完全な匿名化が必要な場合は、ぼかしやモザイクよりも黒塗りの方が安全です。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>10. 推奨ブラウザ</h2>
+    <ul>
+      <li>Google Chrome</li>
+      <li>Microsoft Edge</li>
+    </ul>
+    <p>Clipboard APIを使う機能は、ブラウザやページの開き方によって制限される場合があります。Ctrl + V による貼り付けは比較的動作しやすいです。</p>
+  </section>
+
+  <section>
+    <h2>11. ライセンス</h2>
+    <p>社内利用・個人利用向けのローカルツールとして自由に改変して利用できます。</p>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarkdownViewer</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #11182d;
+      --panel-2: #18223d;
+      --text: #e8eefc;
+      --muted: #9fb0d1;
+      --line: #2a3658;
+      --accent: #6ea8fe;
+      --accent-2: #89d185;
+      --danger: #ff8a8a;
+      --shadow: 0 8px 24px rgba(0,0,0,0.25);
+      --scrollbar-track: #0f1730;
+      --scrollbar-thumb: #3b4b79;
+      --scrollbar-thumb-hover: #5470b6;
+      --splitter-bg1: #263455;
+      --splitter-bg2: #1a2440;
+      --splitter-hover1: #3a5690;
+      --splitter-hover2: #2a4274;
+      --splitter-grip: rgba(255,255,255,0.26);
+      --toolbar-h: 52px;
+      --tree-w: 300px;
+      --editor-w: 360px;
+      --font: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    body.theme-light {
+      --bg: #eef3fb;
+      --panel: #ffffff;
+      --panel-2: #f2f6fd;
+      --text: #172033;
+      --muted: #5e6c86;
+      --line: #d8e0ee;
+      --accent: #2f6feb;
+      --accent-2: #1f8f49;
+      --danger: #d33f49;
+      --shadow: 0 8px 24px rgba(25, 42, 70, 0.12);
+      --scrollbar-track: #e7edf8;
+      --scrollbar-thumb: #a6b8d8;
+      --scrollbar-thumb-hover: #7d99c8;
+      --splitter-bg1: #d8e2f2;
+      --splitter-bg2: #c8d5ea;
+      --splitter-hover1: #bdd0ee;
+      --splitter-hover2: #a9c0e7;
+      --splitter-grip: rgba(54,78,126,0.34);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); overflow: hidden; }
+
+    html {
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    *::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    *::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: 999px;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 999px;
+      border: 2px solid var(--scrollbar-track);
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+    }
+
+    *::-webkit-scrollbar-corner {
+      background: var(--scrollbar-track);
+    }
+    .app { display: grid; grid-template-rows: var(--toolbar-h) 1fr; height: 100vh; width: 100vw; }
+    .toolbar {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border-bottom: 1px solid var(--line); box-shadow: var(--shadow); z-index: 20;
+      position: sticky; top: 0;
+    }
+    .title { font-weight: 700; letter-spacing: 0.02em; margin-right: 8px; white-space: nowrap; }
+    .toolbar button {
+      appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+      border-radius: 10px; padding: 8px 12px; cursor: pointer; transition: .15s ease;
+    }
+    .toolbar button:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .toolbar button.selected { outline: 2px solid var(--accent); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+    .toolbar button.auto-on { background: #1f8f49; border-color: #166736; color: #fff; font-weight: 700; }
+    .toolbar button.primary { background: #1a2952; border-color: #3656a8; }
+    .toolbar button.refresh-btn {
+      background: #ffb020;
+      border-color: #d68b00;
+      color: #1f1400;
+      font-weight: 700;
+    }
+    .toolbar button.refresh-btn:hover {
+      border-color: #b87800;
+      background: #ffbf47;
+      transform: translateY(-1px);
+    }
+    body.theme-light .toolbar button.refresh-btn {
+      background: #ff9f0a;
+      border-color: #cc7a00;
+      color: #ffffff;
+    }
+    body.theme-light .toolbar button.refresh-btn:hover {
+      background: #ffad2f;
+      border-color: #b56c00;
+    }
+    body.theme-light .toolbar button.primary { background: #dce8ff; border-color: #8fb2ff; }
+    .toolbar .path {
+      min-width: 0; flex: 1; color: var(--muted); font-size: 13px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 6px;
+    }
+    .toolbar .badge {
+      font-size: 12px; color: var(--muted); padding: 4px 8px; border: 1px solid var(--line);
+      border-radius: 999px; background: rgba(255,255,255,0.03); white-space: nowrap;
+    }
+    .interval-wrap {
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--panel-2);
+      color: var(--text); font-size: 13px;
+    }
+    .interval-wrap input {
+      width: 72px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--text); outline: none;
+    }
+    .workspace {
+      display: grid; grid-template-columns: var(--tree-w) 8px minmax(320px, 1fr) 8px var(--editor-w);
+      min-height: 0; min-width: 0; height: 100%;
+    }
+    .pane { min-width: 0; min-height: 0; background: var(--panel); overflow: hidden; }
+    .pane-head {
+      height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 0 12px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    }
+    .pane-head .label { font-weight: 600; font-size: 14px; }
+    .pane-body { height: calc(100% - 42px); overflow: auto; min-height: 0; min-width: 0; position: relative; }
+    .splitter {
+      background: linear-gradient(180deg, var(--splitter-bg1), var(--splitter-bg2)); cursor: col-resize; position: relative;
+      touch-action: none; user-select: none; z-index: 5;
+    }
+    .splitter::after {
+      content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 60px;
+      background: var(--splitter-grip); border-radius: 999px;
+    }
+    .splitter:hover { background: linear-gradient(180deg, var(--splitter-hover1), var(--splitter-hover2)); }
+        .tree-wrap { padding: 10px; flex: 1; min-height: 0; overflow: auto; }
+    .tree-pane-body { display: flex; flex-direction: column; overflow: hidden; }
+    .favorites-panel {
+      border-top: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+    .favorites-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .favorites-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .favorites-sort-label {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      padding: 0 2px 0 4px;
+    }
+    .favorites-panel .fav-mini-btn {
+      width: 52px;
+      min-width: 52px;
+      flex: 0 0 52px;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .favorites-panel button,
+    .favorites-panel select {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      min-width: 0;
+      width: 100%;
+    }
+    .tree-search-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .tree-search {
+      width: 100%; margin-bottom: 0; padding: 10px 12px; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--panel); color: var(--text); outline: none;
+      min-width: 0;
+      flex: 1;
+    }
+    .hidden-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+    }
+    .hidden-toggle input {
+      margin: 0;
+      cursor: pointer;
+    }
+    .tree { font-size: 14px; line-height: 1.5; user-select: none; }
+    .tree details { margin-left: 0; }
+    .tree summary { list-style: none; cursor: pointer; color: var(--text); padding: 4px 8px; border-radius: 8px; }
+    .tree summary:hover { background: rgba(255,255,255,0.06); }
+    .tree summary::-webkit-details-marker { display: none; }
+    .tree .file, .tree .folder-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 8px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tree .file:hover, .tree .folder-row:hover { background: rgba(255,255,255,0.06); }
+    .tree .file.active { background: rgba(110,168,254,0.18); outline: 1px solid rgba(110,168,254,0.45); }
+    .tree .icon { width: 18px; text-align: center; flex: 0 0 18px; }
+    .tree .name { overflow: hidden; text-overflow: ellipsis; }
+    .viewer-wrap { padding: 20px 24px 40px; min-height: 100%; }
+    .viewer-meta-header {
+      min-width: 0;
+      flex: 1;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 6px;
+    }
+    .empty { padding: 24px; color: var(--muted); line-height: 1.8; }
+    .editor-wrap { display: flex; flex-direction: column; height: 100%; }
+    .editor-toolbar { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
+    .editor-toolbar button {
+      appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+      border-radius: 10px; padding: 8px 10px; cursor: pointer;
+    }
+    textarea.editor {
+      flex: 1; width: 100%; resize: none; border: 0; outline: none; padding: 16px;
+      background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 14px; line-height: 1.6;
+    }
+    .markdown-body { color: var(--text); line-height: 1.85; word-break: break-word; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { line-height: 1.35; margin-top: 1.6em; }
+    .markdown-body h1 { font-size: 2em; border-bottom: 1px solid var(--line); padding-bottom: .35em; }
+    .markdown-body h2 { font-size: 1.5em; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: .25em; }
+    .markdown-body h3 { font-size: 1.25em; }
+    .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body blockquote { margin: 1em 0; }
+    .markdown-body a { color: #8cc2ff; }
+    body.theme-light .markdown-body a { color: #2f6feb; }
+    .markdown-body code { font-family: var(--mono); background: rgba(255,255,255,0.08); padding: .12em .35em; border-radius: 6px; }
+    .markdown-body pre {
+      background: color-mix(in srgb, var(--panel) 80%, black 20%);
+      border: 1px solid var(--line); padding: 14px; border-radius: 14px; overflow: auto;
+    }
+    .markdown-body pre code { background: transparent; padding: 0; }
+    .markdown-body table { border-collapse: collapse; width: 100%; margin: 1em 0; display: block; overflow: auto; }
+    .markdown-body th, .markdown-body td { border: 1px solid var(--line); padding: 8px 10px; }
+    .markdown-body th { background: rgba(255,255,255,0.06); }
+    .markdown-body blockquote {
+      border-left: 4px solid #5d79c6; padding: 4px 12px; color: var(--text);
+      background: rgba(255,255,255,0.03); border-radius: 0 10px 10px 0;
+    }
+    .markdown-body hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+    .markdown-body img { max-width: 100%; }
+    .markdown-body .mermaid { background: #fff; border-radius: 12px; padding: 12px; overflow: auto; }
+    iframe.html-frame {
+      width: 100%; min-height: calc(100vh - 120px); border: 1px solid var(--line);
+      border-radius: 14px; background: #fff;
+    }
+    .status-danger { color: var(--danger); }
+    .status-ok { color: var(--accent-2); }
+
+    .preview-layout {
+      display: grid;
+      grid-template-columns: var(--outline-w, 260px) 12px minmax(0, 1fr);
+      gap: 0;
+      align-items: start;
+      min-height: 100%;
+    }
+    .preview-layout.outline-hidden {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .outline-side {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      overflow: hidden;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      max-height: calc(100vh - 185px);
+      margin-right: 10px;
+    }
+    .outline-side-head {
+      padding: 10px 12px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.04);
+      flex: 0 0 auto;
+    }
+    .outline-side-body {
+      overflow: auto;
+      padding: 8px;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .outline-splitter {
+      background: linear-gradient(180deg, var(--splitter-bg1), var(--splitter-bg2));
+      cursor: col-resize;
+      position: sticky;
+      top: 0;
+      touch-action: none;
+      user-select: none;
+      z-index: 6;
+      border-radius: 999px;
+      min-height: calc(100vh - 185px);
+      height: calc(100vh - 185px);
+      align-self: stretch;
+      margin-right: 10px;
+      width: 12px;
+    }
+    .outline-splitter::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 3px;
+      height: 100%;
+      background: var(--splitter-grip);
+      border-radius: 999px;
+    }
+    .outline-splitter:hover {
+      background: linear-gradient(180deg, var(--splitter-hover1), var(--splitter-hover2));
+    }
+    .preview-content-wrap {
+      min-width: 0;
+      min-height: 0;
+      margin-left: 10px;
+    }
+    .outline-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .outline-item:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .json-toolbar {
+      display: flex;
+      gap: 8px;
+      margin: 0 0 12px;
+      flex-wrap: wrap;
+    }
+    .json-toolbar button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    .json-wrap {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255,255,255,0.03);
+      overflow: auto;
+    }
+    .json-wrap .json-view {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .drop-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(30, 60, 120, 0.18);
+      backdrop-filter: blur(2px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .drop-overlay.show { display: flex; }
+    .drop-overlay-card {
+      min-width: 360px;
+      max-width: 80vw;
+      padding: 24px 28px;
+      border-radius: 20px;
+      border: 2px dashed var(--accent);
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .drop-overlay-card .big {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .drop-overlay-card .sub {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .hidden { display: none !important; }
+    #debugBar { padding: 6px 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <div class="title">MarkdownViewer</div>
+      <button id="pickBtn" class="primary">ルートフォルダを選択</button>
+      <button id="reopenBtn">前回フォルダ再利用</button>
+      <button id="refreshBtn" class="refresh-btn">更新</button>
+      <button id="autoRefreshBtn">自動更新: OFF</button>
+      <label class="interval-wrap">間隔 <input id="intervalInput" type="number" min="2" max="3600" step="1" value="10"> 秒</label>
+      <button id="toggleEditorBtn">エディタ 表示/非表示</button>
+      <button id="themeBtn">ライト</button>
+      <button id="darkThemeBtn">ダーク</button>
+      <span id="fileCount" class="badge">0 files</span>
+      <span id="memoryStatus" class="badge">記憶: 確認中</span>
+      <div id="rootPath" class="path">URL基準候補: -</div>
+    </div>
+
+    <div id="workspace" class="workspace">
+      <section class="pane" id="treePane">
+        <div class="pane-head">
+          <div class="label">ファイル一覧</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="display:flex; align-items:center; gap:8px;">
+              <select id="fileTypeFilter" style="appearance:none; border:1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer;">
+                <option value="all">すべて</option>
+                <option value="md">.md</option>
+                <option value="html">.html</option>
+                <option value="json">.json</option>
+              </select>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; color: var(--muted); font-size:12px;">
+              展開
+              <select id="expandDepthSelect" style="appearance:none; border:1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer;">
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="99">すべて</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="pane-body tree-pane-body" id="treePaneBody">
+          <div class="tree-wrap">
+            <div class="tree-search-row">
+              <input id="treeSearch" class="tree-search" type="text" placeholder="ファイル名で絞り込み" />
+              <label class="hidden-toggle">
+                <input id="showHiddenToggle" type="checkbox" />
+                <span>隠し</span>
+              </label>
+            </div>
+            <div id="tree" class="tree"></div>
+          </div>
+          <div class="favorites-panel">
+            <div class="favorites-row">
+              <button id="addFavoriteBtn">お気に入り登録</button>
+              <button id="favoriteUpBtn" class="fav-mini-btn">↑</button>
+              <button id="favoriteDownBtn" class="fav-mini-btn">↓</button>
+            </div>
+            <div class="favorites-row">
+              <select id="favoriteSelect" title="">
+                <option value="">お気に入りなし</option>
+              </select>
+            </div>
+            <div class="favorites-row">
+              <button id="openFavoriteBtn">開く</button>
+              <button id="editFavoriteBtn">編集</button>
+              <button id="removeFavoriteBtn">削除</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="splitter" id="splitter1"></div>
+
+      <section class="pane" id="viewerPane">
+        <div class="pane-head" style="justify-content:flex-start;">
+          <div class="label">プレビュー</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:12px; min-width:0; flex:1;">
+            <button id="outlineToggleBtn" style="appearance:none; border:1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer;">アウトライン: OFF</button>
+            <button id="reloadCurrentBtn" style="appearance:none; border:1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer;">現在ファイル再読込</button>
+            <div id="viewerMeta" class="viewer-meta-header">ファイルを選択してください。</div>
+            <span id="viewerType" class="badge">未選択</span>
+          </div>
+        </div>
+        <div class="pane-body" id="viewerPaneBody">
+          <div class="viewer-wrap">
+            <div id="previewLayout" class="preview-layout outline-hidden">
+              <aside id="outlinePane" class="outline-side hidden">
+                <div class="outline-side-head">アウトライン</div>
+                <div id="outlinePaneBody" class="outline-side-body">
+                  <div class="empty" style="padding:12px;">見出しがありません。</div>
+                </div>
+              </aside>
+              <div id="outlineSplitter" class="outline-splitter hidden"></div>
+              <div id="viewerContentWrap" class="preview-content-wrap">
+                <div id="viewer" class="empty">左の一覧から .md または .html を選んでください。<br>※ Mermaid は markdown 内の <code>```mermaid</code> コードブロックに対応します。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="splitter" id="splitter2"></div>
+
+      <section class="pane" id="editorPane">
+        <div class="pane-head">
+          <div class="label">エディタ</div>
+          <span id="editorState" class="badge">非アクティブ</span>
+        </div>
+        <div class="pane-body" id="editorPaneBody">
+          <div class="editor-wrap" id="editorWrap">
+            <div class="editor-toolbar">
+              <button id="applyPreviewBtn">プレビュー反映</button>
+              <button id="saveBtn">保存</button>
+            </div>
+            <textarea id="editor" class="editor" spellcheck="false" placeholder="Markdownファイルを選ぶとここで編集できます。"></textarea>
+          </div>
+          <div id="editorEmpty" class="empty hidden">HTMLを開いている間は右ペインを非表示にします。</div>
+          <div id="debugBar">初期化中...</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="dropOverlay" class="drop-overlay">
+    <div class="drop-overlay-card">
+      <div class="big">ファイルをドロップして開く</div>
+      <div class="sub">対応: .md / .html / .htm / .json</div>
+    </div>
+  </div>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pgrabovets/json-view/dist/jsonview.bundle.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    const THEME_KEY = 'md_html_three_pane_theme';
+    const EDITOR_VISIBLE_KEY = 'markdownviewer_editor_visible';
+    const OUTLINE_VISIBLE_KEY = 'markdownviewer_outline_visible';
+    const OUTLINE_WIDTH_KEY = 'markdownviewer_outline_width';
+    const FILE_TYPE_FILTER_KEY = 'markdownviewer_file_type_filter';
+    const FAVORITE_IDS_KEY = 'markdownviewer_favorite_ids';
+    const FAVORITE_META_KEY = 'markdownviewer_favorite_meta';
+    const EXPAND_DEPTH_KEY = 'markdownviewer_expand_depth';
+    const SHOW_HIDDEN_KEY = 'markdownviewer_show_hidden';
+    const AUTO_REFRESH_KEY = 'markdownviewer_auto_refresh';
+    const AUTO_REFRESH_INTERVAL_KEY = 'markdownviewer_auto_refresh_interval_sec';
+    const TREE_WIDTH_KEY = 'markdownviewer_tree_width';
+    const EDITOR_WIDTH_KEY = 'markdownviewer_editor_width';
+    const LAST_FILE_KEY = 'md_html_three_pane_last_file_path';
+    const DB_NAME = 'markdownviewer_db';
+    const STORE_NAME = 'handles';
+    const ROOT_HANDLE_KEY = 'lastRootDirectoryHandle';
+    const FAVORITE_PREFIX = 'favorite:';
+
+    const $ = (id) => document.getElementById(id);
+    const pickBtn = $('pickBtn');
+    const reopenBtn = $('reopenBtn');
+    const refreshBtn = $('refreshBtn');
+    const addFavoriteBtn = $('addFavoriteBtn');
+    const favoriteSelect = $('favoriteSelect');
+    const openFavoriteBtn = $('openFavoriteBtn');
+    const editFavoriteBtn = $('editFavoriteBtn');
+    const removeFavoriteBtn = $('removeFavoriteBtn');
+    const favoriteUpBtn = $('favoriteUpBtn');
+    const favoriteDownBtn = $('favoriteDownBtn');
+    const autoRefreshBtn = $('autoRefreshBtn');
+    const intervalInput = $('intervalInput');
+    const toggleEditorBtn = $('toggleEditorBtn');
+    const themeBtn = $('themeBtn');
+    const darkThemeBtn = $('darkThemeBtn');
+    const tree = $('tree');
+    const fileTypeFilter = $('fileTypeFilter');
+    const expandDepthSelect = $('expandDepthSelect');
+    const treeSearch = $('treeSearch');
+    const showHiddenToggle = $('showHiddenToggle');
+    const viewer = $('viewer');
+    const outlinePane = $('outlinePane');
+    const outlinePaneBody = $('outlinePaneBody');
+    const previewLayout = $('previewLayout');
+    const outlineSplitter = $('outlineSplitter');
+    const viewerPaneBody = $('viewerPaneBody');
+    const editorPaneBody = $('editorPaneBody');
+    const viewerMeta = $('viewerMeta');
+    const viewerType = $('viewerType');
+    const outlineToggleBtn = $('outlineToggleBtn');
+    const reloadCurrentBtn = $('reloadCurrentBtn');
+    const rootPath = $('rootPath');
+    const fileCount = $('fileCount');
+    const memoryStatus = $('memoryStatus');
+    const editorPane = $('editorPane');
+    const editorWrap = $('editorWrap');
+    const editorEmpty = $('editorEmpty');
+    const editor = $('editor');
+    const editorState = $('editorState');
+    const applyPreviewBtn = $('applyPreviewBtn');
+    const saveBtn = $('saveBtn');
+    const workspace = $('workspace');
+    const debugBar = $('debugBar');
+    const dropOverlay = $('dropOverlay');
+
+    let rootHandle = null;
+    let rememberedHandleCache = null;
+    let allFiles = [];
+    let activeFile = null;
+    let editorVisible = true;
+    let mode = null;
+    let currentTheme = 'dark';
+    let autoRefreshEnabled = false;
+    let autoRefreshIntervalSec = 10;
+    let autoRefreshTimer = null;
+    let syncingScroll = false;
+    let outlineVisible = false;
+    let currentFileTypeFilter = 'all';
+    let currentExpandDepth = 3;
+    let favoriteIds = [];
+    let favoriteMeta = {};
+    let dragCounter = 0;
+    let showHiddenItems = false;
+
+    function debug(msg) { debugBar.textContent = msg; console.log('[MarkdownViewer]', msg); }
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function escapeHtml(str) {
+      return String(str).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    }
+    function guessParentFolderFromUrl() {
+      try {
+        const href = String(window.location.href || '');
+        return decodeURIComponent(href.substring(0, href.lastIndexOf('/') + 1));
+      } catch (e) { return '-'; }
+    }
+    function currentSelfName() {
+      try {
+        return decodeURIComponent((window.location.pathname.split('/').pop() || '')).toLowerCase();
+      } catch (e) { return ''; }
+    }
+
+    function loadShowHidden() {
+      try {
+        showHiddenItems = localStorage.getItem(SHOW_HIDDEN_KEY) === '1';
+      } catch (e) {
+        showHiddenItems = false;
+      }
+      if (showHiddenToggle) showHiddenToggle.checked = showHiddenItems;
+    }
+
+    function saveShowHidden() {
+      try {
+        localStorage.setItem(SHOW_HIDDEN_KEY, showHiddenItems ? '1' : '0');
+      } catch (e) {}
+    }
+
+    function loadExpandDepth() {
+      try {
+        const saved = parseInt(localStorage.getItem(EXPAND_DEPTH_KEY) || '3', 10);
+        currentExpandDepth = Number.isFinite(saved) ? saved : 3;
+      } catch (e) {
+        currentExpandDepth = 3;
+      }
+      if (expandDepthSelect) expandDepthSelect.value = String(currentExpandDepth);
+    }
+
+    function saveExpandDepth() {
+      try {
+        localStorage.setItem(EXPAND_DEPTH_KEY, String(currentExpandDepth));
+      } catch (e) {}
+    }
+
+    function loadFileTypeFilter() {
+      try {
+        const saved = localStorage.getItem(FILE_TYPE_FILTER_KEY) || 'all';
+        currentFileTypeFilter = ['all', 'md', 'html', 'json'].includes(saved) ? saved : 'all';
+      } catch (e) {
+        currentFileTypeFilter = 'all';
+      }
+      fileTypeFilter.value = currentFileTypeFilter;
+    }
+
+    function saveFileTypeFilter() {
+      try {
+        localStorage.setItem(FILE_TYPE_FILTER_KEY, currentFileTypeFilter);
+      } catch (e) {}
+    }
+
+    async function saveHandleByKey(key, handle) {
+      const db = await openHandleDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(handle, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+
+    async function loadHandleByKey(key) {
+      const db = await openHandleDb();
+      const result = await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return result;
+    }
+
+    function loadFavoriteIds() {
+      try {
+        favoriteIds = JSON.parse(localStorage.getItem(FAVORITE_IDS_KEY) || '[]');
+        if (!Array.isArray(favoriteIds)) favoriteIds = [];
+      } catch (e) {
+        favoriteIds = [];
+      }
+    }
+
+    function saveFavoriteIds() {
+      try {
+        localStorage.setItem(FAVORITE_IDS_KEY, JSON.stringify(favoriteIds));
+      } catch (e) {}
+    }
+
+    function loadFavoriteMeta() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(FAVORITE_META_KEY) || '{}');
+        favoriteMeta = raw && typeof raw === 'object' ? raw : {};
+      } catch (e) {
+        favoriteMeta = {};
+      }
+    }
+
+    function saveFavoriteMeta() {
+      try {
+        localStorage.setItem(FAVORITE_META_KEY, JSON.stringify(favoriteMeta));
+      } catch (e) {}
+    }
+
+    function favoriteKey(id) {
+      return FAVORITE_PREFIX + id;
+    }
+
+    async function refreshFavoriteUi() {
+      favoriteSelect.innerHTML = '';
+      if (!favoriteIds.length) {
+        favoriteSelect.innerHTML = '<option value="">お気に入りなし</option>';
+        favoriteSelect.title = '';
+        return;
+      }
+      for (const id of favoriteIds) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        const meta = favoriteMeta[id] || {};
+        try {
+          const handle = await loadHandleByKey(favoriteKey(id));
+          const displayName = meta.label || (handle ? handle.name : '(無効なお気に入り)');
+          opt.textContent = displayName;
+          opt.title = meta.path || displayName;
+        } catch (e) {
+          opt.textContent = meta.label || '(読込失敗)';
+          opt.title = meta.path || opt.textContent;
+        }
+        favoriteSelect.appendChild(opt);
+      }
+      updateFavoriteSelectTooltip();
+    }
+
+    function updateFavoriteSelectTooltip() {
+      const id = favoriteSelect.value;
+      if (!id) {
+        favoriteSelect.title = '';
+        return;
+      }
+      const meta = favoriteMeta[id] || {};
+      const label = meta.label || favoriteSelect.options[favoriteSelect.selectedIndex]?.text || '';
+      const path = meta.path || '';
+      favoriteSelect.title = path || label || '';
+    }
+
+    async function addCurrentFolderToFavorites() {
+      if (!rootHandle) {
+        alert('先にルートフォルダを選択してください。');
+        return;
+      }
+      const id = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+      try {
+        await saveHandleByKey(favoriteKey(id), rootHandle);
+        favoriteIds.push(id);
+        favoriteMeta[id] = {
+          label: rootHandle.name,
+          path: ''
+        };
+        saveFavoriteIds();
+        saveFavoriteMeta();
+        await refreshFavoriteUi();
+        favoriteSelect.value = id;
+        updateFavoriteSelectTooltip();
+        updateFavoriteSelectTooltip();
+      } catch (e) {
+        console.error(e);
+        alert('お気に入り登録に失敗しました。');
+      }
+    }
+
+    async function editSelectedFavorite() {
+      const id = favoriteSelect.value;
+      if (!id) {
+        alert('編集するお気に入りを選択してください。');
+        return;
+      }
+      const meta = favoriteMeta[id] || {};
+      const currentLabel = meta.label || favoriteSelect.options[favoriteSelect.selectedIndex]?.text || '';
+      const currentPath = meta.path || '';
+
+      const newLabel = prompt('お気に入り名を入力してください。', currentLabel);
+      if (newLabel === null) return;
+
+      const newPath = prompt('メモ入力（フルパス等）', currentPath);
+      if (newPath === null) return;
+
+      favoriteMeta[id] = {
+        ...meta,
+        label: newLabel.trim() || currentLabel || 'お気に入り',
+        path: newPath.trim()
+      };
+      saveFavoriteMeta();
+      await refreshFavoriteUi();
+      favoriteSelect.value = id;
+      updateFavoriteSelectTooltip();
+    }
+
+    async function openFavoriteFolder() {
+      const id = favoriteSelect.value;
+      if (!id) return;
+      try {
+        const handle = await loadHandleByKey(favoriteKey(id));
+        if (!handle) {
+          alert('お気に入りフォルダが見つかりません。');
+          return;
+        }
+        const perm = await ensureDirectoryPermission(handle, false);
+        if (perm === 'granted') {
+          await activateRootHandle(handle, 'お気に入りフォルダ');
+          return;
+        }
+        const req = await ensureDirectoryPermission(handle, true);
+        if (req === 'granted') {
+          await activateRootHandle(handle, 'お気に入りフォルダ');
+          return;
+        }
+        alert('お気に入りフォルダの権限が使えませんでした。');
+      } catch (e) {
+        console.error(e);
+        alert('お気に入りフォルダを開けませんでした。');
+      }
+    }
+
+    async function removeSelectedFavorite() {
+      const id = favoriteSelect.value;
+      if (!id) return;
+
+      const meta = favoriteMeta[id] || {};
+      const label = meta.label || favoriteSelect.options[favoriteSelect.selectedIndex]?.text || 'お気に入り';
+      const ok = confirm(`「${label}」を削除しますか？`);
+      if (!ok) return;
+
+      favoriteIds = favoriteIds.filter(x => x !== id);
+      delete favoriteMeta[id];
+      saveFavoriteIds();
+      saveFavoriteMeta();
+      try {
+        const db = await openHandleDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).delete(favoriteKey(id));
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+      } catch (e) {
+        console.warn(e);
+      }
+      await refreshFavoriteUi();
+    }
+
+    function isSupportedDroppedFileName(name) {
+      const lower = String(name || '').toLowerCase();
+      return lower.endsWith('.md') || lower.endsWith('.html') || lower.endsWith('.htm') || lower.endsWith('.json');
+    }
+
+    function detectTypeFromName(name) {
+      const lower = String(name || '').toLowerCase();
+      if (lower.endsWith('.md')) return 'md';
+      if (lower.endsWith('.json')) return 'json';
+      return 'html';
+    }
+
+    function setDropOverlayVisible(visible) {
+      dropOverlay.classList.toggle('show', !!visible);
+    }
+
+    async function openDroppedFile(fileObj) {
+      if (!fileObj || !isSupportedDroppedFileName(fileObj.name)) {
+        alert('対応しているのは .md / .html / .htm / .json です。');
+        return;
+      }
+
+      const raw = await fileObj.text();
+      activeFile = {
+        path: '[一時] ' + fileObj.name,
+        name: fileObj.name,
+        type: detectTypeFromName(fileObj.name),
+        file: fileObj,
+        isTemporary: true,
+        content: raw
+      };
+
+      reloadCurrentBtn.disabled = false;
+      reloadCurrentBtn.style.opacity = '1';
+      viewerMeta.textContent = activeFile.path;
+      viewerType.textContent = activeFile.type.toUpperCase() + ' / 一時ファイル';
+
+      if (activeFile.type === 'md') {
+        editorPane.classList.remove('hidden');
+        editorWrap.classList.remove('hidden');
+        editorEmpty.classList.add('hidden');
+        editor.value = raw;
+        editorState.textContent = '一時Markdown編集中';
+        editorState.className = 'badge status-ok';
+        await renderMarkdown(raw);
+        syncScrollByRatio(viewerPaneBody, editorPaneBody);
+      } else if (activeFile.type === 'json') {
+        editorPane.classList.remove('hidden');
+        editorWrap.classList.remove('hidden');
+        editorEmpty.classList.add('hidden');
+        editor.value = formatJson(raw);
+        editorState.textContent = '一時JSON編集中';
+        editorState.className = 'badge status-ok';
+        await renderJson(raw);
+      } else {
+        editorWrap.classList.add('hidden');
+        editorEmpty.classList.remove('hidden');
+        editorState.textContent = 'HTMLのため非表示';
+        editorState.className = 'badge';
+        await renderHtml(raw);
+        updateOutlineToggleUi();
+      }
+
+      refreshActiveFileHighlight();
+      debug('ドラッグ＆ドロップで一時ファイルを開きました');
+    }
+
+    function setupGlobalDragAndDrop() {
+      window.addEventListener('dragenter', (e) => {
+        if (!e.dataTransfer) return;
+        if (!Array.from(e.dataTransfer.types || []).includes('Files')) return;
+        dragCounter += 1;
+        setDropOverlayVisible(true);
+      });
+
+      window.addEventListener('dragover', (e) => {
+        if (!e.dataTransfer) return;
+        if (!Array.from(e.dataTransfer.types || []).includes('Files')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDropOverlayVisible(true);
+      });
+
+      window.addEventListener('dragleave', () => {
+        dragCounter = Math.max(0, dragCounter - 1);
+        if (dragCounter === 0) setDropOverlayVisible(false);
+      });
+
+      window.addEventListener('drop', async (e) => {
+        dragCounter = 0;
+        setDropOverlayVisible(false);
+        if (!e.dataTransfer) return;
+        const files = Array.from(e.dataTransfer.files || []);
+        if (!files.length) return;
+        e.preventDefault();
+
+        const target = files.find(f => isSupportedDroppedFileName(f.name));
+        if (!target) {
+          alert('対応しているのは .md / .html / .htm / .json です。');
+          return;
+        }
+
+        try {
+          await openDroppedFile(target);
+        } catch (err) {
+          console.error(err);
+          alert('ドラッグ＆ドロップしたファイルを開けませんでした。');
+        }
+      });
+    }
+
+    async function moveSelectedFavorite(delta) {
+      const id = favoriteSelect.value;
+      if (!id) return;
+      const idx = favoriteIds.indexOf(id);
+      if (idx < 0) return;
+      const next = idx + delta;
+      if (next < 0 || next >= favoriteIds.length) return;
+
+      const tmp = favoriteIds[idx];
+      favoriteIds[idx] = favoriteIds[next];
+      favoriteIds[next] = tmp;
+      saveFavoriteIds();
+      await refreshFavoriteUi();
+      favoriteSelect.value = id;
+      updateFavoriteSelectTooltip();
+    }
+
+    function applyTheme(theme) {
+      currentTheme = theme === 'light' ? 'light' : 'dark';
+      document.body.classList.toggle('theme-light', currentTheme === 'light');
+      themeBtn.classList.toggle('selected', currentTheme === 'light');
+      darkThemeBtn.classList.toggle('selected', currentTheme === 'dark');
+      try { localStorage.setItem(THEME_KEY, currentTheme); } catch (e) {}
+    }
+    function loadTheme() {
+      try { applyTheme(localStorage.getItem(THEME_KEY) || 'dark'); } catch (e) { applyTheme('dark'); }
+    }
+
+    function saveEditorVisible() {
+      try { localStorage.setItem(EDITOR_VISIBLE_KEY, editorVisible ? '1' : '0'); } catch (e) {}
+    }
+
+    function loadEditorVisible() {
+      try {
+        const saved = localStorage.getItem(EDITOR_VISIBLE_KEY);
+        editorVisible = saved === null ? true : saved === '1';
+      } catch (e) {
+        editorVisible = true;
+      }
+    }
+
+    function applyEditorVisibility() {
+      if (editorVisible) {
+        editorPane.classList.remove('hidden');
+        workspace.style.gridTemplateColumns = getComputedStyle(document.documentElement).getPropertyValue('--tree-w').trim() + ' 8px minmax(320px, 1fr) 8px ' + getComputedStyle(document.documentElement).getPropertyValue('--editor-w').trim();
+        toggleEditorBtn.classList.add('selected');
+      } else {
+        editorPane.classList.add('hidden');
+        workspace.style.gridTemplateColumns = getComputedStyle(document.documentElement).getPropertyValue('--tree-w').trim() + ' 8px minmax(320px, 1fr) 0px 0px';
+        toggleEditorBtn.classList.remove('selected');
+      }
+    }
+    function savePaneWidths() {
+      try {
+        const treeW = getComputedStyle(document.documentElement).getPropertyValue('--tree-w').trim();
+        const editorW = getComputedStyle(document.documentElement).getPropertyValue('--editor-w').trim();
+        if (treeW) localStorage.setItem(TREE_WIDTH_KEY, treeW);
+        if (editorW) localStorage.setItem(EDITOR_WIDTH_KEY, editorW);
+      } catch (e) {}
+    }
+
+    function loadPaneWidths() {
+      try {
+        const treeW = localStorage.getItem(TREE_WIDTH_KEY);
+        const editorW = localStorage.getItem(EDITOR_WIDTH_KEY);
+        if (treeW) document.documentElement.style.setProperty('--tree-w', treeW);
+        if (editorW) document.documentElement.style.setProperty('--editor-w', editorW);
+      } catch (e) {}
+    }
+
+    function syncScrollByRatio(sourceEl, targetEl) {
+      if (!sourceEl || !targetEl) return;
+      const sourceMax = Math.max(1, sourceEl.scrollHeight - sourceEl.clientHeight);
+      const targetMax = Math.max(1, targetEl.scrollHeight - targetEl.clientHeight);
+      const ratio = sourceEl.scrollTop / sourceMax;
+      targetEl.scrollTop = ratio * targetMax;
+    }
+
+    function setupMarkdownScrollSync() {
+      viewerPaneBody.addEventListener('scroll', () => {
+        if (syncingScroll) return;
+        if (!activeFile || (activeFile.type !== 'md' && activeFile.type !== 'json')) return;
+        if (editorPane.classList.contains('hidden')) return;
+        syncingScroll = true;
+        syncScrollByRatio(viewerPaneBody, editorPaneBody);
+        requestAnimationFrame(() => { syncingScroll = false; });
+      }, { passive: true });
+
+      editorPaneBody.addEventListener('scroll', () => {
+        if (syncingScroll) return;
+        if (!activeFile || (activeFile.type !== 'md' && activeFile.type !== 'json')) return;
+        if (editorPane.classList.contains('hidden')) return;
+        syncingScroll = true;
+        syncScrollByRatio(editorPaneBody, viewerPaneBody);
+        requestAnimationFrame(() => { syncingScroll = false; });
+      }, { passive: true });
+    }
+
+    function loadAutoRefreshSettings() {
+      try {
+        autoRefreshEnabled = localStorage.getItem(AUTO_REFRESH_KEY) === '1';
+        const saved = parseInt(localStorage.getItem(AUTO_REFRESH_INTERVAL_KEY) || '10', 10);
+        autoRefreshIntervalSec = Number.isFinite(saved) ? Math.max(2, Math.min(3600, saved)) : 10;
+      } catch (e) {
+        autoRefreshEnabled = false;
+        autoRefreshIntervalSec = 10;
+      }
+    }
+
+    function saveAutoRefreshSettings() {
+      try {
+        localStorage.setItem(AUTO_REFRESH_KEY, autoRefreshEnabled ? '1' : '0');
+        localStorage.setItem(AUTO_REFRESH_INTERVAL_KEY, String(autoRefreshIntervalSec));
+      } catch (e) {}
+    }
+
+    function updateAutoRefreshUi() {
+      autoRefreshBtn.textContent = '自動更新: ' + (autoRefreshEnabled ? 'ON' : 'OFF');
+      autoRefreshBtn.classList.toggle('auto-on', autoRefreshEnabled);
+      autoRefreshBtn.classList.toggle('selected', autoRefreshEnabled);
+      intervalInput.value = String(autoRefreshIntervalSec);
+    }
+
+    async function runRefresh() {
+      if (!rootHandle) return;
+      if (activeFile && activeFile.type === 'md' && document.activeElement === editor) {
+        debug('編集中のため自動更新をスキップ');
+        return;
+      }
+      await loadTreeFromRoot();
+      startAutoRefresh();
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+    }
+
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      if (!autoRefreshEnabled) return;
+      autoRefreshTimer = setInterval(() => {
+        runRefresh().catch(err => console.error(err));
+      }, autoRefreshIntervalSec * 1000);
+    }
+
+    function applyAutoRefreshSettings() {
+      updateAutoRefreshUi();
+      saveAutoRefreshSettings();
+      startAutoRefresh();
+    }
+
+
+    function saveLastOpenedFilePath(path) {
+      try { if (path) localStorage.setItem(LAST_FILE_KEY, path); } catch (e) {}
+    }
+    function loadLastOpenedFilePath() {
+      try { return localStorage.getItem(LAST_FILE_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function openHandleDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function saveRememberedDirectoryHandle(handle) {
+      rememberedHandleCache = handle;
+      try {
+        const db = await openHandleDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(handle, ROOT_HANDLE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+        memoryStatus.textContent = '記憶: 保存済み';
+        return true;
+      } catch (e) {
+        memoryStatus.textContent = '記憶: 一時のみ';
+        console.warn(e);
+        return false;
+      }
+    }
+    async function loadRememberedDirectoryHandle() {
+      if (rememberedHandleCache) return rememberedHandleCache;
+      try {
+        const db = await openHandleDb();
+        const result = await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).get(ROOT_HANDLE_KEY);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+        db.close();
+        if (result) {
+          rememberedHandleCache = result;
+          memoryStatus.textContent = '記憶: 保存済み';
+        } else {
+          memoryStatus.textContent = '記憶: なし';
+        }
+        return result;
+      } catch (e) {
+        memoryStatus.textContent = rememberedHandleCache ? '記憶: 一時のみ' : '記憶: なし';
+        return rememberedHandleCache || null;
+      }
+    }
+    async function ensureDirectoryPermission(handle, requestWrite) {
+      if (!handle) return 'denied';
+      const options = requestWrite ? { mode: 'readwrite' } : { mode: 'read' };
+      try {
+        const current = await handle.queryPermission(options);
+        if (current === 'granted') return 'granted';
+        if (!requestWrite) return current;
+        return await handle.requestPermission(options);
+      } catch (e) {
+        return 'denied';
+      }
+    }
+
+    async function activateRootHandle(handle, label) {
+      rootHandle = handle;
+      rememberedHandleCache = handle;
+      mode = 'fsapi';
+      await saveRememberedDirectoryHandle(handle);
+      rootPath.textContent = label + ': ' + handle.name;
+      await loadTreeFromRoot();
+      startAutoRefresh();
+    }
+
+    async function pickRootDirectory() {
+      debug('ルートフォルダ選択を実行');
+      if (!window.showDirectoryPicker) {
+        alert('この環境ではルートフォルダAPIが使えません。Chrome / Edge の対応環境で開いてください。');
+        return;
+      }
+      try {
+        const remembered = await loadRememberedDirectoryHandle();
+        const options = { mode: 'readwrite' };
+        if (remembered) options.startIn = remembered;
+        const handle = await window.showDirectoryPicker(options);
+        await activateRootHandle(handle, '選択ルート');
+      } catch (e) {
+        if (e && e.name === 'AbortError') { debug('フォルダ選択はキャンセルされました'); return; }
+        console.error(e);
+        debug('ルートフォルダ選択に失敗');
+        alert('ルートフォルダ選択に失敗しました。Chrome / Edge の対応環境か確認してください。');
+      }
+    }
+
+    async function reopenRememberedDirectory() {
+      debug('前回フォルダ再利用を実行');
+      const remembered = await loadRememberedDirectoryHandle();
+      const candidate = remembered || rootHandle || rememberedHandleCache;
+      if (!candidate) {
+        alert('前回のフォルダ記録がありません。まず一度「ルートフォルダを選択」を実行してください。');
+        return;
+      }
+      const perm = await ensureDirectoryPermission(candidate, false);
+      if (perm === 'granted') {
+        await activateRootHandle(candidate, remembered ? '前回フォルダ' : '現在セッションのフォルダ');
+        return;
+      }
+      const req = await ensureDirectoryPermission(candidate, true);
+      if (req === 'granted') {
+        await activateRootHandle(candidate, remembered ? '前回フォルダ' : '現在セッションのフォルダ');
+        return;
+      }
+      alert('前回フォルダの権限が使えませんでした。もう一度フォルダを選択してください。');
+    }
+
+    async function walkDirectory(dirHandle, currentPath) {
+      for await (const entry of dirHandle.values()) {
+        const nextPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        if (entry.kind === 'directory') {
+          await walkDirectory(entry, nextPath);
+        } else if (entry.kind === 'file') {
+          const lower = entry.name.toLowerCase();
+          if (lower.endsWith('.md') || lower.endsWith('.html') || lower.endsWith('.htm') || lower.endsWith('.json')) {
+            if (entry.name.toLowerCase() === currentSelfName()) continue;
+            allFiles.push({
+              path: nextPath,
+              name: entry.name,
+              type: lower.endsWith('.md') ? 'md' : (lower.endsWith('.json') ? 'json' : 'html'),
+              handle: entry
+            });
+          }
+        }
+      }
+    }
+
+    async function tryRestoreLastOpenedFile() {
+      const lastPath = loadLastOpenedFilePath();
+      if (!lastPath || !allFiles.length) return;
+      if (activeFile && activeFile.path === lastPath) return;
+      const target = allFiles.find(f => f.path === lastPath);
+      if (!target) return;
+      try { await openFile(target); renderTree(); } catch (e) { console.warn(e); }
+    }
+
+    async function afterFilesReload() {
+      allFiles.sort((a, b) => a.path.localeCompare(b.path, 'ja'));
+      fileCount.textContent = `${allFiles.length} files`;
+      renderTree();
+      await tryRestoreLastOpenedFile();
+    }
+
+    async function loadTreeFromRoot() {
+      if (!rootHandle) return;
+      debug('フォルダを再帰走査中');
+      allFiles = [];
+      await walkDirectory(rootHandle, '');
+      await afterFilesReload();
+      debug('一覧を更新しました');
+    }
+
+    function isHiddenName(name) {
+      return String(name || '').startsWith('.');
+    }
+
+    function isHiddenPath(path) {
+      return String(path || '').split('/').some(part => isHiddenName(part));
+    }
+
+    function buildTreeStructure(files) {
+      const root = { folders: new Map(), files: [] };
+      for (const file of files) {
+        const parts = file.path.split('/');
+        let node = root;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const folder = parts[i];
+          if (!node.folders.has(folder)) node.folders.set(folder, { folders: new Map(), files: [] });
+          node = node.folders.get(folder);
+        }
+        node.files.push(file);
+      }
+      return root;
+    }
+
+    function cloneFilteredTree(node, matcher) {
+      const cloned = { folders: new Map(), files: [] };
+
+      for (const file of node.files) {
+        if (matcher(file)) cloned.files.push(file);
+      }
+
+      for (const [folderName, childNode] of node.folders.entries()) {
+        const filteredChild = cloneFilteredTree(childNode, matcher);
+        if (filteredChild.files.length || filteredChild.folders.size) {
+          cloned.folders.set(folderName, filteredChild);
+        }
+      }
+
+      return cloned;
+    }
+
+    function renderTreeNode(node, depth) {
+      const container = document.createElement('div');
+      const folderNames = [...node.folders.keys()].sort((a, b) => a.localeCompare(b, 'ja'));
+
+      for (const folderName of folderNames) {
+        const details = document.createElement('details');
+        details.open = depth < currentExpandDepth;
+
+        const summary = document.createElement('summary');
+        summary.innerHTML = `<div class="folder-row" style="padding-left:${depth * 18}px;"><span class="icon">📁</span><span class="name">${escapeHtml(folderName)}</span></div>`;
+        details.appendChild(summary);
+
+        const child = renderTreeNode(node.folders.get(folderName), depth + 1);
+        details.appendChild(child);
+        container.appendChild(details);
+      }
+
+      node.files
+        .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+        .forEach(file => {
+          const row = document.createElement('div');
+          row.className = 'file' + (activeFile && activeFile.path === file.path ? ' active' : '');
+          row.title = file.path;
+          row.style.paddingLeft = `${depth * 18}px`;
+          row.innerHTML = `<span class="icon">${file.type === 'md' ? '📝' : (file.type === 'json' ? '🧩' : '🌐')}</span><span class="name">${escapeHtml(file.name)}</span>`;
+          row.addEventListener('click', async () => {
+            await openFile(file);
+            refreshActiveFileHighlight();
+          });
+          container.appendChild(row);
+        });
+
+      return container;
+    }
+
+    function refreshActiveFileHighlight() {
+      const rows = tree.querySelectorAll('.file');
+      rows.forEach(row => {
+        const isActive = !!(activeFile && row.title === activeFile.path);
+        row.classList.toggle('active', isActive);
+      });
+    }
+
+    function renderTree() {
+      const keyword = treeSearch.value.trim().toLowerCase();
+
+      const matcher = (f) => {
+        const typeOk =
+          currentFileTypeFilter === 'md' ? f.type === 'md' :
+          currentFileTypeFilter === 'html' ? f.type === 'html' :
+          currentFileTypeFilter === 'json' ? f.type === 'json' :
+          true;
+
+        if (!typeOk) return false;
+        if (!showHiddenItems && isHiddenPath(f.path)) return false;
+
+        if (!keyword) return true;
+
+        return f.path.toLowerCase().includes(keyword) || f.name.toLowerCase().includes(keyword);
+      };
+
+      const fullTree = buildTreeStructure(allFiles);
+      const filteredTree = cloneFilteredTree(fullTree, matcher);
+
+      if (!filteredTree.files.length && !filteredTree.folders.size) {
+        tree.innerHTML = '<div class="empty">該当ファイルがありません。</div>';
+        return;
+      }
+
+      tree.innerHTML = '';
+      tree.appendChild(renderTreeNode(filteredTree, 0));
+    }
+
+    async function refreshFileListOnly() {
+      if (!rootHandle) return;
+      const prevPath = activeFile ? activeFile.path : '';
+      debug('左ペイン一覧のみ更新');
+      allFiles = [];
+      await walkDirectory(rootHandle, '');
+      allFiles.sort((a, b) => a.path.localeCompare(b.path, 'ja'));
+      fileCount.textContent = `${allFiles.length} files`;
+      renderTree();
+
+      // 開いているファイルの参照だけ差し替え（本文再読込はしない）
+      if (prevPath && activeFile) {
+        const matched = allFiles.find(f => f.path === prevPath);
+        if (matched) {
+          activeFile = { ...matched, content: activeFile.content };
+        }
+      }
+    }
+
+    async function reloadCurrentFile() {
+      if (!activeFile) return;
+      const currentPath = activeFile.path;
+      let target = null;
+
+      if (activeFile.isTemporary) {
+        target = activeFile;
+      } else if (rootHandle) {
+        if (!allFiles.length) {
+          await refreshFileListOnly();
+        }
+        target = allFiles.find(f => f.path === currentPath) || activeFile;
+      } else {
+        target = activeFile;
+      }
+
+      const raw = await readFileText(target);
+      activeFile = { ...target, content: raw };
+
+      viewerMeta.textContent = activeFile.path;
+      viewerType.textContent = activeFile.type.toUpperCase();
+
+      if (activeFile.type === 'md') {
+        editor.value = raw;
+        await renderMarkdown(raw);
+        syncScrollByRatio(editorPaneBody, viewerPaneBody);
+        editorState.textContent = '再読込済み';
+        editorState.className = 'badge';
+      } else if (activeFile.type === 'json') {
+        editor.value = formatJson(raw);
+        await renderJson(raw);
+        editorState.textContent = '再読込済み';
+        editorState.className = 'badge';
+      } else {
+        await renderHtml(raw);
+      }
+      refreshActiveFileHighlight();
+      debug('現在ファイルを再読込しました');
+    }
+
+
+    function loadOutlineWidth() {
+      try {
+        const saved = localStorage.getItem(OUTLINE_WIDTH_KEY);
+        if (saved) document.documentElement.style.setProperty('--outline-w', saved);
+      } catch (e) {}
+    }
+
+    function saveOutlineWidth() {
+      try {
+        const value = getComputedStyle(document.documentElement).getPropertyValue('--outline-w').trim();
+        if (value) localStorage.setItem(OUTLINE_WIDTH_KEY, value);
+      } catch (e) {}
+    }
+
+    function applyOutlineLayout() {
+      const enabled = !!(activeFile && activeFile.type === 'md' && outlineVisible);
+      previewLayout.classList.toggle('outline-hidden', !enabled);
+      outlinePane.classList.toggle('hidden', !enabled);
+      outlineSplitter.classList.toggle('hidden', !enabled);
+    }
+
+    function loadOutlineVisible() {
+      try {
+        outlineVisible = localStorage.getItem(OUTLINE_VISIBLE_KEY) === '1';
+      } catch (e) {
+        outlineVisible = false;
+      }
+    }
+
+    function saveOutlineVisible() {
+      try {
+        localStorage.setItem(OUTLINE_VISIBLE_KEY, outlineVisible ? '1' : '0');
+      } catch (e) {}
+    }
+
+    function updateOutlineToggleUi() {
+      outlineToggleBtn.textContent = 'アウトライン: ' + (outlineVisible ? 'ON' : 'OFF');
+      outlineToggleBtn.classList.toggle('selected', outlineVisible);
+      outlineToggleBtn.disabled = !(activeFile && activeFile.type === 'md');
+      outlineToggleBtn.style.opacity = outlineToggleBtn.disabled ? '0.6' : '1';
+      applyOutlineLayout();
+    }
+
+    function scrollPreviewToHeading(headingEl) {
+      if (!headingEl || !viewerPaneBody) return;
+      const containerRect = viewerPaneBody.getBoundingClientRect();
+      const headingRect = headingEl.getBoundingClientRect();
+      const delta = headingRect.top - containerRect.top;
+      const targetTop = viewerPaneBody.scrollTop + delta - 12;
+      viewerPaneBody.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    }
+
+    function escapeRegExp(str) {
+      return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function scrollEditorToHeadingText(headingText) {
+      if (!headingText || !editor) return;
+      const text = editor.value || '';
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/);
+      const target = String(headingText).trim();
+      let charIndex = 0;
+      let foundIndex = -1;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const normalized = line.replace(/^\s{0,3}#{1,6}\s+/, '').trim();
+        if (normalized === target) {
+          foundIndex = charIndex;
+          break;
+        }
+        charIndex += line.length + 1;
+      }
+
+      if (foundIndex < 0) {
+        // 完全一致がなければ部分一致で再探索
+        charIndex = 0
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const normalized = line.replace(/^\s{0,3}#{1,6}\s+/, '').trim();
+          if (normalized.includes(target) || target.includes(normalized)) {
+            foundIndex = charIndex;
+            break;
+          }
+          charIndex += line.length + 1;
+        }
+      }
+
+      if (foundIndex < 0) return;
+
+      try {
+        editor.focus({ preventScroll: true });
+      } catch (e) {}
+
+      editor.setSelectionRange(foundIndex, foundIndex);
+
+      // textarea内部のだいたいの行位置へスクロール
+      const before = text.slice(0, foundIndex);
+      const lineNo = before.split(/\r?\n/).length - 1;
+      const style = getComputedStyle(editor);
+      const lh = parseFloat(style.lineHeight);
+      const lineHeight = Number.isFinite(lh) ? lh : 22;
+      const targetTop = Math.max(0, lineNo * lineHeight - editor.clientHeight * 0.2);
+      editor.scrollTo({ top: targetTop, behavior: 'smooth' });
+    }
+
+    function slugifyHeading(text, index) {
+      const base = String(text || '')
+        .trim()
+        .toLowerCase()
+        .replace(/<[^>]+>/g, '')
+        .replace(/[\s\u3000]+/g, '-')
+        .replace(/[^\w\-ぁ-んァ-ヶ一-龠々ー]/g, '');
+      return (base || 'heading') + '-' + index;
+    }
+
+    function buildOutlineHtmlFromViewer() {
+      const article = viewer.querySelector('.markdown-body');
+      outlinePaneBody.innerHTML = '<div class="empty" style="padding:12px;">見出しがありません。</div>';
+
+      if (!article) {
+        applyOutlineLayout();
+        return;
+      }
+
+      const headings = article.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      if (!headings.length) {
+        applyOutlineLayout();
+        return;
+      }
+
+      headings.forEach((h, idx) => {
+        if (!h.id) h.id = slugifyHeading(h.textContent, idx + 1);
+      });
+
+      if (!outlineVisible) {
+        applyOutlineLayout();
+        return;
+      }
+
+      outlinePaneBody.innerHTML = '';
+
+      headings.forEach((h) => {
+        const btn = document.createElement('button');
+        btn.className = 'outline-item';
+        btn.style.paddingLeft = (8 + (parseInt(h.tagName.substring(1), 10) - 1) * 16) + 'px';
+        btn.textContent = h.textContent.trim();
+        btn.addEventListener('click', () => {
+          scrollPreviewToHeading(h);
+          if (activeFile && activeFile.type === 'md') {
+            scrollEditorToHeadingText(h.textContent || '');
+          }
+        });
+        outlinePaneBody.appendChild(btn);
+      });
+
+      applyOutlineLayout();
+    }
+
+    function toggleOutline() {
+      outlineVisible = !outlineVisible;
+      saveOutlineVisible();
+      updateOutlineToggleUi();
+      if (activeFile && activeFile.type === 'md') {
+        renderMarkdown(activeFile.content || editor.value || '').catch(console.error);
+      }
+    }
+
+    async function readFileText(file) {
+      if (file && file.isTemporary && file.file) {
+        return await file.file.text();
+      }
+      if (mode === 'fsapi') {
+        const realFile = await file.handle.getFile();
+        return await realFile.text();
+      }
+      return await file.file.text();
+    }
+
+    async function renderMarkdown(mdText) {
+      let html = '';
+      try {
+        html = window.marked.parse(mdText);
+      } catch (e) {
+        html = '<pre><code>' + escapeHtml(mdText) + '</code></pre>';
+      }
+      viewer.innerHTML = `<article class="markdown-body">${html}</article>`;
+      await renderMermaidsInViewer();
+      buildOutlineHtmlFromViewer();
+      updateOutlineToggleUi();
+    }
+
+    async function renderMermaidsInViewer() {
+      const blocks = viewer.querySelectorAll('pre code.language-mermaid, pre code.lang-mermaid');
+      // marked UMD may emit language-mermaid
+      blocks.forEach((code) => {
+        const pre = code.closest('pre');
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = code.textContent;
+        pre.replaceWith(div);
+      });
+      const blocks2 = viewer.querySelectorAll('.mermaid');
+      if (!blocks2.length || !window.mermaid) return;
+      try {
+        for (let i = 0; i < blocks2.length; i++) {
+          const block = blocks2[i];
+          const source = block.textContent;
+          try {
+            const id = 'mermaid-' + Date.now() + '-' + i;
+            const rendered = await window.mermaid.render(id, source);
+            block.innerHTML = rendered.svg || rendered;
+          } catch (e) {
+            block.innerHTML = '<pre><code>' + escapeHtml(source) + '</code></pre><div class="status-danger">Mermaidの描画に失敗しました。</div>';
+          }
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    function formatJson(text) {
+      try {
+        return JSON.stringify(JSON.parse(text), null, 2);
+      } catch (e) {
+        return text;
+      }
+    }
+
+    function buildJsonTreeHtml(data, depth = 1) {
+      const esc = escapeHtml;
+      const isObj = data && typeof data === 'object';
+      if (!isObj) {
+        if (typeof data === 'string') return `<span style="color:#0ea5e9">"${esc(data)}"</span>`;
+        if (typeof data === 'number') return `<span style="color:#f59e0b">${data}</span>`;
+        if (typeof data === 'boolean') return `<span style="color:#10b981">${data}</span>`;
+        if (data === null) return `<span style="color:#ef4444">null</span>`;
+        return `<span>${esc(String(data))}</span>`;
+      }
+
+      const isArray = Array.isArray(data);
+      const entries = isArray ? data.map((v, i) => [i, v]) : Object.entries(data);
+      const open = depth <= 2 ? ' open' : '';
+      const bracketL = isArray ? '[' : '{';
+      const bracketR = isArray ? ']' : '}';
+
+      const children = entries.map(([k, v]) => {
+        const keyHtml = isArray ? '' : `<span style="color:#a855f7">"${esc(String(k))}"</span>: `;
+        const childIsObj = v && typeof v === 'object';
+        const valueHtml = childIsObj ? buildJsonTreeHtml(v, depth + 1) : buildJsonTreeHtml(v, depth + 1);
+        return `<div style="padding-left:18px; margin:2px 0;">${keyHtml}${valueHtml}</div>`;
+      }).join('');
+
+      const summaryText = isArray ? `Array(${entries.length})` : `Object(${entries.length})`;
+      return `<details${open} style="margin:4px 0;"><summary style="cursor:pointer; user-select:none;">${summaryText} <span style="color:var(--muted)">${bracketL}...${bracketR}</span></summary><div style="margin-top:4px;">${children}</div></details>`;
+    }
+
+    async function renderJson(raw) {
+      const formatted = formatJson(raw);
+      let inner = '';
+      try {
+        const parsed = JSON.parse(raw);
+        inner = `
+          <article class="markdown-body">
+            <h1>JSON</h1>
+            <div class="json-toolbar">
+              <button type="button" id="jsonExpandAllBtn">すべて展開</button>
+              <button type="button" id="jsonCollapseAllBtn">すべて折りたたむ</button>
+            </div>
+            <div class="json-wrap"><div id="jsonTreeRoot" class="json-view">${buildJsonTreeHtml(parsed)}</div></div>
+          </article>`;
+      } catch (e) {
+        inner = `<article class="markdown-body"><h1>JSON</h1><pre><code>${escapeHtml(formatted)}</code></pre></article>`;
+      }
+
+      viewer.innerHTML = inner;
+      outlinePaneBody.innerHTML = '<div class="empty" style="padding:12px;">JSON表示ではアウトラインは利用しません。</div>';
+      applyOutlineLayout();
+      updateOutlineToggleUi();
+
+      const expandBtn = document.getElementById('jsonExpandAllBtn');
+      const collapseBtn = document.getElementById('jsonCollapseAllBtn');
+      const root = document.getElementById('jsonTreeRoot');
+
+      if (root && expandBtn && collapseBtn) {
+        expandBtn.addEventListener('click', () => {
+          root.querySelectorAll('details').forEach(el => el.open = true);
+        });
+        collapseBtn.addEventListener('click', () => {
+          root.querySelectorAll('details').forEach((el, idx) => el.open = idx === 0);
+        });
+      }
+    }
+
+    async function renderHtml(raw) {
+      const blob = new Blob([raw], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      outlinePaneBody.innerHTML = '<div class="empty" style="padding:12px;">Markdownファイルで利用できます。</div>';
+      viewer.innerHTML = `<iframe class="html-frame" sandbox="allow-same-origin allow-scripts" src="${url}"></iframe>`;
+      applyOutlineLayout();
+    }
+
+    async function openFile(file) {
+      const raw = await readFileText(file);
+      activeFile = { ...file, content: raw };
+      reloadCurrentBtn.disabled = false;
+      reloadCurrentBtn.style.opacity = '1';
+      saveLastOpenedFilePath(activeFile.path);
+      refreshActiveFileHighlight();
+      viewerMeta.textContent = activeFile.path;
+      viewerType.textContent = activeFile.type.toUpperCase();
+
+      if (activeFile.type === 'md') {
+        editorPane.classList.remove('hidden');
+        editorWrap.classList.remove('hidden');
+        editorEmpty.classList.add('hidden');
+        editor.value = raw;
+        editorState.textContent = '編集中';
+        editorState.className = 'badge status-ok';
+        await renderMarkdown(raw);
+        syncScrollByRatio(viewerPaneBody, editorPaneBody);
+      } else if (activeFile.type === 'json') {
+        editorPane.classList.remove('hidden');
+        editorWrap.classList.remove('hidden');
+        editorEmpty.classList.add('hidden');
+        editor.value = formatJson(raw);
+        editorState.textContent = 'JSON編集中';
+        editorState.className = 'badge status-ok';
+        await renderJson(raw);
+      } else {
+        editorWrap.classList.add('hidden');
+        editorEmpty.classList.remove('hidden');
+        editorState.textContent = 'HTMLのため非表示';
+        editorState.className = 'badge';
+        await renderHtml(raw);
+        updateOutlineToggleUi();
+      }
+    }
+
+    async function saveActiveMarkdown() {
+      if (!activeFile || (activeFile.type !== 'md' && activeFile.type !== 'json')) return;
+      if (activeFile.isTemporary) {
+        alert('ドラッグ＆ドロップで開いた一時ファイルは上書き保存できません。');
+        return;
+      }
+      if (mode === 'fsapi') {
+        const writable = await activeFile.handle.createWritable();
+        await writable.write(editor.value);
+        await writable.close();
+        activeFile.content = editor.value;
+        if (activeFile.type === 'md') {
+          await renderMarkdown(activeFile.content);
+          syncScrollByRatio(editorPaneBody, viewerPaneBody);
+        } else {
+          await renderJson(activeFile.content);
+        }
+        editorState.textContent = '保存済み';
+        editorState.className = 'badge';
+      } else {
+        alert('保存できるのは「ルートフォルダを選択」で開いた場合のみです。');
+      }
+    }
+
+    function toggleEditorPane() {
+      editorVisible = !editorVisible;
+      applyEditorVisibility();
+      saveEditorVisible();
+      savePaneWidths();
+    }
+
+    function setupSplitter(splitter, modeName) {
+      let dragging = false;
+      let pointerId = null;
+
+      splitter.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        pointerId = e.pointerId;
+        try { splitter.setPointerCapture(pointerId); } catch (err) {}
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+      });
+
+      const move = (e) => {
+        if (!dragging) return;
+        if (pointerId !== null && e.pointerId !== undefined && e.pointerId !== pointerId) return;
+        const total = window.innerWidth;
+        const rect = workspace.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        if (modeName === 'left') {
+          const left = clamp(x, 180, Math.max(260, total * 0.45));
+          document.documentElement.style.setProperty('--tree-w', `${left}px`);
+        } else {
+          const right = clamp(rect.right - e.clientX, 0, Math.max(260, total * 0.45));
+          document.documentElement.style.setProperty('--editor-w', `${right}px`);
+        }
+        applyEditorVisibility();
+      };
+
+      const end = () => {
+        if (dragging) savePaneWidths();
+        dragging = false;
+        pointerId = null;
+        document.body.style.cursor = '';
+      };
+
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    }
+
+    async function tryAutoOpenRememberedDirectory() {
+      if (!window.showDirectoryPicker) {
+        memoryStatus.textContent = '記憶: 非対応';
+        rootPath.textContent = `URL基準候補: ${guessParentFolderFromUrl()} / この環境では自動再オープン不可`;
+        return;
+      }
+      const remembered = await loadRememberedDirectoryHandle();
+      if (!remembered) {
+        rootPath.textContent = `URL基準候補: ${guessParentFolderFromUrl()} / 前回フォルダ記録なし`;
+        return;
+      }
+      const perm = await ensureDirectoryPermission(remembered, false);
+      if (perm === 'granted') {
+        await activateRootHandle(remembered, '前回フォルダ（自動再オープン）');
+      } else {
+        rootPath.textContent = `URL基準候補: ${guessParentFolderFromUrl()} / 前回フォルダあり（再利用ボタンで再許可）`;
+      }
+    }
+
+    function safeInitMermaid() {
+      try {
+        if (window.mermaid && window.mermaid.initialize) {
+          window.mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+        }
+      } catch (e) { console.warn(e); }
+    }
+
+    function setupOutlineSplitter() {
+      let dragging = false;
+      let pointerId = null;
+
+      outlineSplitter.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        pointerId = e.pointerId;
+        try { outlineSplitter.setPointerCapture(pointerId); } catch (err) {}
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+      });
+
+      const move = (e) => {
+        if (!dragging) return;
+        if (pointerId !== null && e.pointerId !== undefined && e.pointerId !== pointerId) return;
+        const rect = previewLayout.getBoundingClientRect();
+        const localX = e.clientX - rect.left;
+        const width = clamp(localX, 160, Math.max(220, rect.width * 0.55));
+        document.documentElement.style.setProperty('--outline-w', `${width}px`);
+      };
+
+      const end = () => {
+        if (dragging) saveOutlineWidth();
+        dragging = false;
+        pointerId = null;
+        document.body.style.cursor = '';
+      };
+
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    }
+
+    async function init() {
+      loadTheme();
+      loadEditorVisible();
+      loadOutlineVisible();
+      loadOutlineWidth();
+      loadPaneWidths();
+      loadAutoRefreshSettings();
+      loadFileTypeFilter();
+      loadShowHidden();
+      loadExpandDepth();
+      loadFavoriteIds();
+      loadFavoriteMeta();
+      safeInitMermaid();
+      rootPath.textContent = `URL基準候補: ${guessParentFolderFromUrl()} / 前回フォルダを確認中...`;
+
+      pickBtn.addEventListener('click', pickRootDirectory);
+      reopenBtn.addEventListener('click', reopenRememberedDirectory);
+      addFavoriteBtn.addEventListener('click', addCurrentFolderToFavorites);
+      openFavoriteBtn.addEventListener('click', openFavoriteFolder);
+      editFavoriteBtn.addEventListener('click', editSelectedFavorite);
+      removeFavoriteBtn.addEventListener('click', removeSelectedFavorite);
+      favoriteUpBtn.addEventListener('click', () => { moveSelectedFavorite(-1).catch(console.error); });
+      favoriteDownBtn.addEventListener('click', () => { moveSelectedFavorite(1).catch(console.error); });
+      favoriteSelect.addEventListener('change', updateFavoriteSelectTooltip);
+      favoriteSelect.addEventListener('mouseenter', updateFavoriteSelectTooltip);
+      favoriteSelect.addEventListener('mouseover', updateFavoriteSelectTooltip);
+      favoriteSelect.addEventListener('mousemove', updateFavoriteSelectTooltip);
+      refreshBtn.addEventListener('click', async () => {
+        if (rootHandle) await runRefresh();
+        else await pickRootDirectory();
+      });
+      outlineToggleBtn.addEventListener('click', toggleOutline);
+      reloadCurrentBtn.addEventListener('click', async () => {
+        try { await reloadCurrentFile(); } catch (e) { console.error(e); alert('現在ファイルの再読込に失敗しました。'); }
+      });
+      autoRefreshBtn.addEventListener('click', () => {
+        autoRefreshEnabled = !autoRefreshEnabled;
+        applyAutoRefreshSettings();
+      });
+      intervalInput.addEventListener('change', () => {
+        const value = parseInt(intervalInput.value || '10', 10);
+        autoRefreshIntervalSec = Number.isFinite(value) ? Math.max(2, Math.min(3600, value)) : 10;
+        applyAutoRefreshSettings();
+      });
+      toggleEditorBtn.addEventListener('click', toggleEditorPane);
+      themeBtn.addEventListener('click', () => applyTheme('light'));
+      darkThemeBtn.addEventListener('click', () => applyTheme('dark'));
+      treeSearch.addEventListener('input', renderTree);
+      fileTypeFilter.addEventListener('change', () => { currentFileTypeFilter = fileTypeFilter.value; saveFileTypeFilter(); renderTree(); });
+      showHiddenToggle.addEventListener('change', () => { showHiddenItems = !!showHiddenToggle.checked; saveShowHidden(); renderTree(); });
+      expandDepthSelect.addEventListener('change', () => { currentExpandDepth = parseInt(expandDepthSelect.value || '3', 10); saveExpandDepth(); renderTree(); });
+      fileTypeFilter.addEventListener('change', () => {
+        currentFileTypeFilter = fileTypeFilter.value;
+        saveFileTypeFilter();
+        renderTree();
+      });
+      applyPreviewBtn.addEventListener('click', async () => {
+        if (!activeFile || (activeFile.type !== 'md' && activeFile.type !== 'json')) return;
+        activeFile.content = editor.value;
+        if (activeFile.type === 'md') {
+          await renderMarkdown(activeFile.content);
+          syncScrollByRatio(editorPaneBody, viewerPaneBody);
+        } else {
+          await renderJson(activeFile.content);
+        }
+        editorState.textContent = 'プレビュー反映済み';
+        editorState.className = 'badge';
+      });
+      saveBtn.addEventListener('click', async () => {
+        try { await saveActiveMarkdown(); } catch (e) { alert('保存に失敗しました。'); console.error(e); }
+      });
+      setupSplitter($('splitter1'), 'left');
+      setupSplitter($('splitter2'), 'right');
+      setupOutlineSplitter();
+      setupMarkdownScrollSync();
+      setupGlobalDragAndDrop();
+      applyEditorVisibility();
+      applyAutoRefreshSettings();
+
+      outlineToggleBtn.disabled = true;
+      outlineToggleBtn.style.opacity = '0.6';
+      applyOutlineLayout();
+      reloadCurrentBtn.disabled = true;
+      reloadCurrentBtn.style.opacity = '0.6';
+      await refreshFavoriteUi();
+      await tryAutoOpenRememberedDirectory();
+      debug('初期化完了');
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>

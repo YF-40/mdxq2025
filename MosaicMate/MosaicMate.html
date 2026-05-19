@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<!-- ========================================================
+  MosaicMate
+  画像の一部を、ぼかし・モザイク・黒塗り・スタンプなどで加工する
+  HTML / CSS / JavaScript 1ファイル完結アプリです。
+  初心者でも修正箇所を探しやすいように、各場所に名前を付けています。
+======================================================== -->
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MosaicMate</title>
+<style>
+  /* ========================================================
+    CSS：全体デザイン設定
+    ここでは色・余白・角丸・影など、アプリ全体で使う共通値を定義します。
+    色をまとめて変えたい場合は、この :root を修正すると便利です。
+  ======================================================== */
+  :root{
+    --bg:#f3f6f8; --panel:#ffffff; --text:#172033; --muted:#667085; --line:#d8e0e8;
+    --primary:#0f766e; --primary-dark:#0b5f59; --blue:#2563eb; --danger:#b91c1c; --warn:#f59e0b;
+    --shadow:0 10px 26px rgba(15,23,42,.09); --radius:16px;
+  }
+  /* CSS：全要素のサイズ計算を扱いやすくする基本設定 */
+  *{box-sizing:border-box}
+
+  /* CSS：ページ全体の背景色・文字色・フォント */
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Meiryo",sans-serif}
+  /* CSS：画面上部のアプリ名ヘッダー */
+  header{padding:14px 18px;background:linear-gradient(90deg,#047857,#0f766e);color:#fff;box-shadow:var(--shadow)}
+  header h1{margin:0;font-size:20px;letter-spacing:.02em}
+  /* CSS：メイン画面。左が操作パネル、右が画像表示エリア */
+  main{display:grid;grid-template-columns:430px 1fr;gap:14px;padding:14px;min-height:calc(100vh - 56px)}
+  /* CSS：白いカード型パネル。操作パネルと画像表示パネルで共通使用 */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
+  .panel h2{font-size:16px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .row{margin:13px 0}
+  .row label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+  /* CSS：標準のファイル選択ボタンは隠し、独自のD&Dエリアを使います */
+  input[type=file]{display:none}
+  select,input[type=text],input[type=number]{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff;color:var(--text)}
+  input[type=range]{width:100%}
+  /* CSS：各種ボタンの共通デザイン */
+  button{border:0;border-radius:10px;padding:9px 11px;font-weight:700;cursor:pointer;background:#e5e7eb;color:#111827;transition:.12s}
+  button:hover{filter:brightness(.97);transform:translateY(-1px)}
+  button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  /* CSS：用途別ボタン色。保存・貼付・削除などを見分けやすくします */
+  .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+  .btn-blue{background:var(--blue);color:#fff}.btn-danger{background:var(--danger);color:#fff}.btn-warn{background:var(--warn);color:#111827}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  /* CSS：画像選択・ドラッグ&ドロップ用の枠 */
+  .drop{border:2px dashed #86c7bd;border-radius:14px;background:#eefdf9;padding:18px;text-align:center;cursor:pointer}
+  .drop.dragover{background:#ccfbf1;border-color:var(--primary)}
+  .drop strong{display:block;margin-bottom:6px}.drop span{display:block;color:var(--muted);font-size:13px;line-height:1.6}
+  /* CSS：補足説明や選択範囲情報を表示する小さな説明ボックス */
+  .hint{font-size:12px;color:var(--muted);line-height:1.65;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:10px}
+  .notice{font-size:12px;color:#92400e;line-height:1.65;background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:10px}
+  /* CSS：スライダーと数値入力を横並びにする行 */
+  .value-line{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center}
+  /* CSS：絵文字・顔文字スタンプ設定エリア */
+  .stamp-box{border:2px solid #f59e0b;background:#fffbeb;border-radius:14px;padding:11px;margin-top:8px}
+  .stamp-box h3{font-size:14px;margin:0 0 8px;color:#92400e}
+  .stamp-common-box{border:1px solid #fcd34d;background:#fffdf5;border-radius:12px;padding:10px;margin-top:10px}
+  .stamp-common-box h4{margin:0 0 8px;font-size:13px;color:#92400e}
+  /* CSS：絵文字スタンプ一覧。7列表示 */
+  .emoji-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;margin-top:8px;max-height:320px;overflow:auto;padding-right:2px}
+  /* CSS：顔文字スタンプ一覧。横に長い顔文字が折り返されにくいよう2列表示 */
+  .kaomoji-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px;max-height:360px;overflow:auto;padding-right:2px}
+  .emoji-preset,.kaomoji-preset{background:#fff;border:1px solid #fcd34d}
+  .emoji-preset{font-size:22px;line-height:1;min-height:43px;padding:8px 4px}
+  .kaomoji-preset{font-size:14px;line-height:1.2;min-height:42px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 10px;text-align:left}
+  .emoji-preset.active,.kaomoji-preset.active{outline:3px solid rgba(245,158,11,.35);background:#fef3c7}
+  /* CSS：右側の画像編集ワークスペース */
+  .workspace{min-width:0;display:flex;flex-direction:column;gap:10px}
+  /* CSS：拡大・縮小・100%などのツールバー */
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .toolbar button{min-width:62px}
+  .status{font-size:13px;color:var(--muted);margin-left:auto}
+  /* CSS：画像を表示する黒いエリア。ここでCtrl+ドラッグ移動やCtrl+ホイール拡大縮小を行います */
+  .canvas-wrap{position:relative;min-height:560px;background:#111827;border-radius:var(--radius);overflow:hidden;padding:18px;display:flex;align-items:center;justify-content:center}
+  /* CSS：canvasを載せる台。transformで画像全体を上下左右に移動します */
+  .canvas-stage{width:max-content;max-width:none;line-height:0;transform:translate(var(--pan-x,0px),var(--pan-y,0px));will-change:transform}
+  .canvas-wrap.pan-ready{cursor:grab}
+  .canvas-wrap.panning{cursor:grabbing;user-select:none}
+  /* CSS：モザイク・ぼかしなどの加工範囲を数値入力するエリア */
+  .selection-editor{border:1px solid #bfdbfe;background:#eff6ff;border-radius:12px;padding:10px;margin:12px 0}
+  .selection-editor h3{font-size:13px;margin:0 0 8px;color:#1d4ed8}
+  .rect-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .rect-grid label{font-size:12px;margin:0;color:#334155}
+  .rect-grid input{padding:7px}
+  /* CSS：実際に画像を描画・加工するcanvas */
+  canvas{background:#fff;box-shadow:0 12px 36px rgba(0,0,0,.28);image-rendering:auto;max-width:none;cursor:crosshair;user-select:none;-webkit-user-drag:none}
+  canvas.stamp-cursor{cursor:none}
+  canvas.pan-cursor{cursor:grab}
+  .empty{color:#cbd5e1;text-align:center;margin:auto;line-height:1.8}.empty strong{font-size:18px;color:#fff}
+  /* CSS：画面幅が狭いときは、左パネルと右パネルを縦並びにします */
+  @media (max-width: 1100px){main{grid-template-columns:1fr}.canvas-wrap{min-height:420px}}
+  @media (max-width: 520px){.emoji-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.kaomoji-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <!-- ========================================================
+    HTML：画面上部 / アプリ名表示エリア
+    アプリ名を変更したい場合は、ここの h1 と head 内の title を変更します。
+  ======================================================== -->
+  <header><h1>MosaicMate</h1></header>
+  <!-- ========================================================
+    HTML：メイン画面
+    左側：操作パネル / 右側：画像表示・編集エリア
+  ======================================================== -->
+  <main>
+    <!-- ========================================================
+      HTML：左側 / 操作パネル
+      画像読み込み、加工モード、効果設定、保存ボタンなどを配置します。
+    ======================================================== -->
+    <section class="panel">
+      <h2>操作パネル</h2>
+
+      <!-- HTML：画像読み込みエリア。クリック選択・D&D・Ctrl+V貼り付けに対応 -->
+      <div id="dropZone" class="drop">
+        <strong>画像を選択 または D&amp;D</strong>
+        <span>PNG / JPG / WebP など<br>Ctrl+Vでクリップボード画像も貼り付けできます</span>
+      </div>
+      <input id="fileInput" type="file" accept="image/*" />
+
+      <!-- HTML：加工モード選択。select内のoptionが加工メニューになります -->
+      <div class="row">
+        <label for="mode">加工モード</label>
+        <select id="mode">
+          <option value="blur">ぼかし</option>
+          <option value="mosaic">モザイク</option>
+          <option value="blackout">黒塗り</option>
+          <option value="whiteout">白塗り</option>
+          <option value="translucent">半透明塗り</option>
+          <option value="border">枠線</option>
+          <option value="hatch">斜線</option>
+          <option value="grayscale">グレースケール</option>
+          <option value="noise">ノイズ</option>
+          <option value="emojiStamp">絵文字スタンプ</option>
+          <option value="kaomojiStamp">顔文字スタンプ</option>
+        </select>
+      </div>
+
+      <!-- HTML：モザイク設定。加工モードが「モザイク」のときだけ表示 -->
+      <div class="row" id="mosaicRow">
+        <label>モザイクの粗さ</label>
+        <div class="value-line">
+          <input id="mosaicSize" type="range" min="4" max="80" value="18" />
+          <input id="mosaicSizeNum" type="number" min="4" max="80" value="18" />
+        </div>
+      </div>
+
+      <!-- HTML：ぼかし設定。加工モードが「ぼかし」のときだけ表示 -->
+      <div class="row" id="blurRow" style="display:none;">
+        <label>ぼかし強度</label>
+        <div class="value-line">
+          <input id="blurSize" type="range" min="2" max="40" value="12" />
+          <input id="blurSizeNum" type="number" min="2" max="40" value="12" />
+        </div>
+      </div>
+
+      <!-- HTML：半透明塗り設定。塗りの濃さを調整 -->
+      <div class="row" id="translucentRow" style="display:none;">
+        <label>半透明塗りの濃さ</label>
+        <div class="value-line">
+          <input id="translucentOpacity" type="range" min="10" max="90" value="50" />
+          <input id="translucentOpacityNum" type="number" min="10" max="90" value="50" />
+        </div>
+      </div>
+
+      <!-- HTML：枠線設定。枠線の太さを調整 -->
+      <div class="row" id="borderRow" style="display:none;">
+        <label>枠線の太さ</label>
+        <div class="value-line">
+          <input id="borderWidth" type="range" min="1" max="30" value="6" />
+          <input id="borderWidthNum" type="number" min="1" max="30" value="6" />
+        </div>
+      </div>
+
+      <!-- HTML：斜線設定。斜線の間隔を調整 -->
+      <div class="row" id="hatchRow" style="display:none;">
+        <label>斜線の間隔</label>
+        <div class="value-line">
+          <input id="hatchSpacing" type="range" min="6" max="50" value="16" />
+          <input id="hatchSpacingNum" type="number" min="6" max="50" value="16" />
+        </div>
+      </div>
+
+      <!-- HTML：ノイズ設定。ノイズの強さを調整 -->
+      <div class="row" id="noiseRow" style="display:none;">
+        <label>ノイズの強さ</label>
+        <div class="value-line">
+          <input id="noiseStrength" type="range" min="10" max="120" value="55" />
+          <input id="noiseStrengthNum" type="number" min="10" max="120" value="55" />
+        </div>
+      </div>
+
+      <!-- HTML：絵文字スタンプ設定エリア -->
+      <div class="stamp-box" id="emojiStampBox" style="display:none;">
+        <h3>絵文字スタンプ</h3>
+        <div class="row">
+          <label for="emojiText">スタンプ文字</label>
+          <input id="emojiText" type="text" value="😎" />
+        </div>
+        <div class="notice">絵文字プリセットは7列表示です。プリセットから選ぶか、入力欄に任意のUnicode絵文字を直接入力できます。</div>
+        <div class="emoji-grid" id="emojiGrid"></div>
+      </div>
+
+      <!-- HTML：顔文字スタンプ設定エリア -->
+      <div class="stamp-box" id="kaomojiStampBox" style="display:none;">
+        <h3>顔文字スタンプ</h3>
+        <div class="row">
+          <label for="kaomojiText">スタンプ文字</label>
+          <input id="kaomojiText" type="text" value="( ˘ω˘ )" />
+        </div>
+        <div class="notice">主要な顔文字を100個以上登録しています。1行に1つまたは2つずつ表示し、折り返しで見づらくならないようにしています。✓ / ✕ も入れています。</div>
+        <div class="kaomoji-grid" id="kaomojiGrid"></div>
+      </div>
+
+      <!-- HTML：絵文字・顔文字スタンプの共通設定 -->
+      <div class="stamp-box" id="stampSettingBox" style="display:none;">
+        <h3>スタンプ共通設定</h3>
+        <div class="row">
+          <label>スタンプサイズ</label>
+          <div class="value-line">
+            <input id="stampSize" type="range" min="20" max="220" value="72" />
+            <input id="stampSizeNum" type="number" min="20" max="220" value="72" />
+          </div>
+        </div>
+        <div class="row">
+          <label>回転</label>
+          <div class="value-line">
+            <input id="stampRotate" type="range" min="-45" max="45" value="0" />
+            <input id="stampRotateNum" type="number" min="-45" max="45" value="0" />
+          </div>
+        </div>
+        <div class="row">
+          <label>透明度</label>
+          <div class="value-line">
+            <input id="stampOpacity" type="range" min="20" max="100" value="100" />
+            <input id="stampOpacityNum" type="number" min="20" max="100" value="100" />
+          </div>
+        </div>
+        <div class="notice">
+          スタンプモードでは、画像上でマウスを動かすとプレビュー表示され、クリックするとその位置に貼り付けます。<br>
+          Windowsの絵文字入力は <b>Win + .</b> です。
+        </div>
+      </div>
+
+      <!-- HTML：範囲の数値指定エリア。X/Y/幅/高さを手入力できます -->
+      <div class="selection-editor" id="selectionEditor" style="display:none;">
+        <h3>範囲の数値指定</h3>
+        <div class="rect-grid">
+          <div>
+            <label for="rectX">X</label>
+            <input id="rectX" type="number" min="0" step="1" value="0" />
+          </div>
+          <div>
+            <label for="rectY">Y</label>
+            <input id="rectY" type="number" min="0" step="1" value="0" />
+          </div>
+          <div>
+            <label for="rectW">幅</label>
+            <input id="rectW" type="number" min="1" step="1" value="100" />
+          </div>
+          <div>
+            <label for="rectH">高さ</label>
+            <input id="rectH" type="number" min="1" step="1" value="100" />
+          </div>
+        </div>
+      </div>
+
+      <!-- HTML：現在の選択範囲や操作状態を表示する案内欄 -->
+      <div class="row hint" id="selectionInfo">
+        選択範囲：なし<br>画像を読み込み後、加工したい場所をドラッグしてください。
+      </div>
+
+      <!-- HTML：加工操作ボタン。適用・選択解除・Undo・全リセット -->
+      <div class="btns">
+        <button id="applyBtn" class="btn-primary" disabled>選択範囲に適用</button>
+        <button id="clearSelBtn" disabled>選択解除</button>
+        <button id="undoBtn" disabled>元に戻す</button>
+        <button id="resetBtn" class="btn-danger" disabled>全リセット</button>
+      </div>
+
+      <!-- HTML：画像の貼り付け・保存ボタン -->
+      <div class="btns" style="margin-top:8px;">
+        <button id="pasteBtn" class="btn-blue">クリップボードから貼付</button>
+        <button id="downloadBtn" class="btn-primary" disabled>PNG保存</button>
+      </div>
+
+    </section>
+
+    <!-- ========================================================
+      HTML：右側 / 画像表示・編集エリア
+      canvasに画像を表示し、マウス操作で範囲選択・スタンプ配置を行います。
+    ======================================================== -->
+    <section class="panel workspace">
+      <!-- HTML：画像表示のツールバー。拡大・縮小・100%・全体表示を操作します -->
+      <div class="toolbar">
+        <button id="zoomOutBtn" disabled>－</button>
+        <button id="zoomInBtn" disabled>＋</button>
+        <button id="actualBtn" disabled>100%</button>
+        <button id="fitBtn" disabled>表示サイズ調整</button>
+        <span class="status" id="status">画像未読込</span>
+      </div>
+      <!-- HTML：画像表示エリア。canvasStageを移動・拡大縮小して表示します -->
+      <div class="canvas-wrap" id="canvasWrap">
+        <div id="empty" class="empty"><div><strong>ここに画像が表示されます</strong><br>画像を選択、D&amp;D、またはCtrl+Vで貼り付けてください。</div></div>
+        <!-- HTML：canvasの移動用ステージ。Ctrl+ドラッグでこのステージを動かします -->
+        <div id="canvasStage" class="canvas-stage">
+          <canvas id="canvas" style="display:none;"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+// ========================================================
+// JavaScript：MosaicMate メイン処理
+// ここから下は、画像読み込み・範囲選択・加工・スタンプ・保存などの処理です。
+// 初心者向けに「何のための処理か」が分かるよう、機能ごとにコメントを入れています。
+// ========================================================
+
+// ------------------------------
+// JavaScript：HTML要素の取得
+// getElementByIdで、HTMLにあるボタンや入力欄をJavaScriptから操作できるようにします。
+// 例：dropZoneは画像のD&Dエリア、canvasは画像を描く場所です。
+// ------------------------------
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const canvasWrap = document.getElementById('canvasWrap');
+const canvasStage = document.getElementById('canvasStage');
+const empty = document.getElementById('empty');
+const statusEl = document.getElementById('status');
+const selectionInfo = document.getElementById('selectionInfo');
+const selectionEditor = document.getElementById('selectionEditor');
+const rectX = document.getElementById('rectX');
+const rectY = document.getElementById('rectY');
+const rectW = document.getElementById('rectW');
+const rectH = document.getElementById('rectH');
+
+const mode = document.getElementById('mode');
+const mosaicRow = document.getElementById('mosaicRow');
+const blurRow = document.getElementById('blurRow');
+const emojiStampBox = document.getElementById('emojiStampBox');
+const kaomojiStampBox = document.getElementById('kaomojiStampBox');
+const stampSettingBox = document.getElementById('stampSettingBox');
+const mosaicSize = document.getElementById('mosaicSize');
+const mosaicSizeNum = document.getElementById('mosaicSizeNum');
+const blurSize = document.getElementById('blurSize');
+const blurSizeNum = document.getElementById('blurSizeNum');
+const translucentRow = document.getElementById('translucentRow');
+const translucentOpacity = document.getElementById('translucentOpacity');
+const translucentOpacityNum = document.getElementById('translucentOpacityNum');
+const borderRow = document.getElementById('borderRow');
+const borderWidth = document.getElementById('borderWidth');
+const borderWidthNum = document.getElementById('borderWidthNum');
+const hatchRow = document.getElementById('hatchRow');
+const hatchSpacing = document.getElementById('hatchSpacing');
+const hatchSpacingNum = document.getElementById('hatchSpacingNum');
+const noiseRow = document.getElementById('noiseRow');
+const noiseStrength = document.getElementById('noiseStrength');
+const noiseStrengthNum = document.getElementById('noiseStrengthNum');
+const emojiText = document.getElementById('emojiText');
+const kaomojiText = document.getElementById('kaomojiText');
+const stampSize = document.getElementById('stampSize');
+const stampSizeNum = document.getElementById('stampSizeNum');
+const stampRotate = document.getElementById('stampRotate');
+const stampRotateNum = document.getElementById('stampRotateNum');
+const stampOpacity = document.getElementById('stampOpacity');
+const stampOpacityNum = document.getElementById('stampOpacityNum');
+const emojiGrid = document.getElementById('emojiGrid');
+const kaomojiGrid = document.getElementById('kaomojiGrid');
+
+const applyBtn = document.getElementById('applyBtn');
+const clearSelBtn = document.getElementById('clearSelBtn');
+const undoBtn = document.getElementById('undoBtn');
+const resetBtn = document.getElementById('resetBtn');
+const pasteBtn = document.getElementById('pasteBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const fitBtn = document.getElementById('fitBtn');
+const zoomInBtn = document.getElementById('zoomInBtn');
+const zoomOutBtn = document.getElementById('zoomOutBtn');
+const actualBtn = document.getElementById('actualBtn');
+
+// ------------------------------
+// JavaScript：アプリの状態を保存する変数
+// 画像が読み込まれているか、現在のズーム倍率、選択範囲、Undo履歴などを管理します。
+// ------------------------------
+let imageLoaded = false;
+let baseCanvas = document.createElement('canvas');
+let baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });
+let originalImageData = null;
+let historyStack = [];
+let fileBaseName = 'edited_image';
+let zoom = 1;
+
+let isDragging = false;
+let dragStart = null;
+let selection = null;
+let mouseOnCanvas = false;
+let stampPoint = null;
+
+let ctrlPanHint = false;
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let panX = 0;
+let panY = 0;
+let panStartOffsetX = 0;
+let panStartOffsetY = 0;
+
+// ------------------------------
+// JavaScript：絵文字スタンプのプリセット一覧
+// ここに絵文字を追加すると、絵文字スタンプ一覧にボタンとして表示されます。
+// ------------------------------
+const emojiPresets = [
+  '😀','😁','😂','🤣','😊','😍','😘',
+  '😎','🤩','🥳','🤔','🤫','😴','😷',
+  '🥸','🫥','🙈','🙉','🙊','👀','🙏',
+  '👍','👎','👏','🙌','👌','✌️','🤞',
+  '💯','🔥','⭐','🌟','✨','💥','💫',
+  '❤️','💙','💚','💛','🧡','💜','🖤',
+  '🎉','🎊','🎈','🎁','🏆','🥇','🎯',
+  '🚫','⛔','⚠️','✅','❌','⭕','❗',
+  '📌','📍','🔒','🔓','🛡️','🔍','💡',
+  '🐱','🐶','🐻','🐼','🐸','🐤','🦊',
+  '🍀','🌸','🌈','☀️','☁️','☂️','❄️',
+  '🍎','🍙','☕','🍺','🎵','🎬','📷'
+];
+
+// ------------------------------
+// JavaScript：顔文字スタンプのプリセット一覧
+// ここに顔文字を追加すると、顔文字スタンプ一覧にボタンとして表示されます。
+// ------------------------------
+const kaomojiPresets = [
+  '( ˘ω˘ )','(´・ω・`)','(｀・ω・´)','(≧▽≦)','(>_<)','(;_;)',
+  '(T_T)','＼(^o^)／','٩(ˊᗜˋ*)و','m(_ _)m','(￣▽￣)','(￣ー￣)',
+  '(・∀・)','(・ω・)','(・×・)','(・_・)','(._.)','(^_^;)',
+  '(^_^)','(^o^)','(^-^)','(^▽^)','(^q^)','(๑•̀ㅂ•́)و✧',
+  '(๑˃̵ᴗ˂̵)و','(๑´ڡ`๑)','(*´ω｀*)','(*´∀｀*)','(*^^*)','(*ﾟ▽ﾟ*)',
+  '(^^)','(^^)/','(^o^)/','(^-^)/','( ﾟдﾟ)','Σ(ﾟДﾟ)',
+  '(；・∀・)','(；´Д｀)','(；ﾟДﾟ)','(；ω；)','(つД`)ノ','(´；ω；｀)',
+  '｡ﾟ(ﾟ´Д｀ﾟ)ﾟ｡','(TOT)','(ﾉД`)','(ノД`)・゜・。','(´Д⊂ヽ','(´；д；`)',
+  '(´・д・｀)','(´-﹏-`；)','(´；ω；`)','(இдஇ; )','(´；Д；｀)','( •́ㅿ•̀ )',
+  '(・へ・)','(￣^￣)','(｀；ω；´)','(｡ŏ﹏ŏ)','(；一_一)','(；´∀｀)',
+  '(・_・;)', '(；￣Д￣)','(°ロ°)!','(ﾟдﾟ)','( ﾟдﾟ)ﾊｯ!','( ﾟдﾟ)ﾎﾟｶｰﾝ',
+  '(´ﾟдﾟ｀)','(； ･`д･´)','(・・?','(?_?)','(・・;','(・・)',
+  '(^^ゞ','(￣◇￣;)','(；´Д`A','ヽ(´ー｀)ノ','ヽ(=´▽`=)ﾉ','ヽ(^o^)丿',
+  'ヾ(*´∀｀*)ﾉ','ヾ(｡>﹏<｡)ﾉﾞ','ヾ(≧▽≦)ﾉ','ヾ(＾v＾)k','(o^^o)','(o^-\')b',
+  '(o´艸`)','(o・ω・o)','(oﾟ▽ﾟ)o','(o_ _)o','(๑•̀ㅁ•́๑)✧','(๑•̀д•́๑)',
+  '(๑•̀ㅂ•́)و','(๑¯ω¯๑)','(๑•́ ₃ •̀๑)','(๑°⌓°๑)','( •̀ ω •́ )✧','( •̀ㅂ•́)و',
+  '( •̀∀•́ )✧','( •̀ᴗ•́ )و','( •̀ .̫ •́ )✧','( •̀⌓•́ )✧','( •̀ω•́ )','( •̀_•́ )',
+  '( ˙꒳˙ )','( ˙▿˙ )','( ˙︶˙ )','( ˊᵕˋ )','( ˊᗜˋ )','( ˊ̱˂˃ˋ̱ )',
+  '( ˶\'ᵕ\'˶ )','( ˶ˆᗜˆ˵ )','( ˶°ㅁ°) !!','( ˘︹˘ )','( ˘•ω•˘ )','( ˘⌣˘ )',
+  '(・ัω・ั)','(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧','(づ｡◕‿‿◕｡)づ','(っ˘ω˘ς )','(っ◔◡◔)っ','(っ´ω`)っ',
+  '(っ- ‸ -ς)','(つ≧▽≦)つ','(つ✧ω✧)つ','(づ￣ ³￣)づ','(づ￣ ³￣)づ♡','(╯°□°）╯︵ ┻━┻',
+  '┬─┬ ノ( ゜-゜ノ)','¯\\_(ツ)_/¯','(☞ﾟヮﾟ)☞','☜(ﾟヮﾟ☜)','(☞^o^) ☞','(☞ ͡° ͜ʖ ͡°)☞',
+  '( ͡° ͜ʖ ͡°)','ʕ•ᴥ•ʔ','ʕ￫ᴥ￩ʔ','ʕ·ᴥ·ʔ','ʕ•̀ω•́ʔ✧','ʕ´•ᴥ•`ʔ',
+  '(*￣0￣)/','(*￣▽￣)b','(￣▽￣)b','(￣▽￣)V','(｀･ω･´)ゞ','(｀･ω･´)ゝ',
+  '( ﾟ∀ﾟ)o彡°','(ﾉ◕ヮ◕)ﾉ*','(∩´∀｀)∩','(∩^o^)⊃━☆','(∩˃o˂∩)♡','(∩´﹏`∩)',
+  '(∩︵∩)','(●´ω｀●)','(●´⌓`●)','(●´ϖ`●)','(●´人｀●)','(●´∀｀●)',
+  '(♥ω♥*)','(ღ˘⌣˘ღ)','(❁´◡`❁)','(✿◠‿◠)','(☆▽☆)','(☆ω☆)',
+  '✓','✕','○','△','□','☆'
+];
+
+// ------------------------------
+// JavaScript：範囲選択が必要な加工モード一覧
+// ここに登録したモードは、四角い範囲を指定してから適用するタイプです。
+// ------------------------------
+const areaEffectModes = new Set([
+  'mosaic', 'blur', 'blackout', 'whiteout', 'translucent',
+  'border', 'hatch', 'grayscale', 'noise'
+]);
+
+// ------------------------------
+// JavaScript：モード判定用の小さな関数群
+// 「今はスタンプモードか？」「範囲加工モードか？」を判定します。
+// ------------------------------
+function isStampModeValue(value) {
+  return value === 'emojiStamp' || value === 'kaomojiStamp';
+}
+function isStampMode() {
+  return isStampModeValue(mode.value);
+}
+function isAreaEffectMode(value = mode.value) {
+  return areaEffectModes.has(value);
+}
+function getCurrentStampText() {
+  return mode.value === 'kaomojiStamp' ? (kaomojiText.value || '( ˘ω˘ )') : (emojiText.value || '😎');
+}
+function setCurrentStampText(value) {
+  if (mode.value === 'kaomojiStamp') {
+    kaomojiText.value = value;
+    markActivePreset(kaomojiGrid, value);
+  } else {
+    emojiText.value = value;
+    markActivePreset(emojiGrid, value);
+  }
+}
+
+// ------------------------------
+// JavaScript：初期化処理
+// ページを開いた直後に、プリセットボタン作成・スライダー連動・イベント登録を行います。
+// ------------------------------
+makePresetButtons(emojiGrid, emojiPresets, 'emoji-preset', value => {
+  emojiText.value = value;
+  markActivePreset(emojiGrid, value);
+  render();
+});
+makePresetButtons(kaomojiGrid, kaomojiPresets, 'kaomoji-preset', value => {
+  kaomojiText.value = value;
+  markActivePreset(kaomojiGrid, value);
+  render();
+});
+markActivePreset(emojiGrid, emojiText.value);
+markActivePreset(kaomojiGrid, kaomojiText.value);
+
+bindRangeAndNumber(mosaicSize, mosaicSizeNum, render);
+bindRangeAndNumber(blurSize, blurSizeNum, render);
+bindRangeAndNumber(translucentOpacity, translucentOpacityNum, render);
+bindRangeAndNumber(borderWidth, borderWidthNum, render);
+bindRangeAndNumber(hatchSpacing, hatchSpacingNum, render);
+bindRangeAndNumber(noiseStrength, noiseStrengthNum, render);
+bindRangeAndNumber(stampSize, stampSizeNum, render);
+bindRangeAndNumber(stampRotate, stampRotateNum, render);
+bindRangeAndNumber(stampOpacity, stampOpacityNum, render);
+emojiText.addEventListener('input', () => { markActivePreset(emojiGrid, emojiText.value); render(); });
+kaomojiText.addEventListener('input', () => { markActivePreset(kaomojiGrid, kaomojiText.value); render(); });
+[rectX, rectY, rectW, rectH].forEach(input => {
+  input.addEventListener('input', updateSelectionFromInputs);
+  input.addEventListener('change', updateSelectionFromInputs);
+});
+
+mode.addEventListener('change', () => {
+  selection = null;
+  stampPoint = null;
+  syncSelectionInputs();
+  updateModeUI();
+  render();
+  updateSelectionInfo();
+});
+updateModeUI();
+
+// 加工モードに合わせて、必要な設定欄だけを表示します。
+// 例：ぼかしなら「ぼかし強度」、ノイズなら「ノイズの強さ」を表示します。
+function updateModeUI(){
+  const m = mode.value;
+  const stamp = isStampModeValue(m);
+  mosaicRow.style.display = m === 'mosaic' ? 'block' : 'none';
+  blurRow.style.display = m === 'blur' ? 'block' : 'none';
+  translucentRow.style.display = m === 'translucent' ? 'block' : 'none';
+  borderRow.style.display = m === 'border' ? 'block' : 'none';
+  hatchRow.style.display = m === 'hatch' ? 'block' : 'none';
+  noiseRow.style.display = m === 'noise' ? 'block' : 'none';
+  emojiStampBox.style.display = m === 'emojiStamp' ? 'block' : 'none';
+  kaomojiStampBox.style.display = m === 'kaomojiStamp' ? 'block' : 'none';
+  stampSettingBox.style.display = stamp ? 'block' : 'none';
+
+  applyBtn.textContent = stamp ? '画像をクリックして配置' : '選択範囲に適用';
+  applyBtn.disabled = !imageLoaded || stamp || !selection;
+  clearSelBtn.disabled = !imageLoaded || (!selection && !stamp);
+  canvas.classList.toggle('stamp-cursor', stamp && !isPanning && !ctrlPanHint);
+  updateSelectionEditorUI();
+  updatePanUI();
+}
+
+// Ctrlキーを押したときなど、画像移動用のカーソル表示を切り替えます。
+function updatePanUI(){
+  const panReady = imageLoaded && (ctrlPanHint || isPanning);
+  canvas.classList.toggle('pan-cursor', panReady);
+  canvasWrap.classList.toggle('pan-ready', panReady);
+  canvasWrap.classList.toggle('panning', isPanning);
+  applyPanTransform();
+}
+
+// canvasStageにCSS変数を渡し、画像全体を上下左右に移動します。
+function applyPanTransform(){
+  canvasStage.style.setProperty('--pan-x', `${Math.round(panX)}px`);
+  canvasStage.style.setProperty('--pan-y', `${Math.round(panY)}px`);
+}
+
+// 絵文字・顔文字の配列から、クリック可能なボタンをまとめて作ります。
+function makePresetButtons(container, values, className, onPick){
+  container.innerHTML = '';
+  values.forEach(value => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = className;
+    b.textContent = value;
+    b.title = value;
+    b.dataset.value = value;
+    b.addEventListener('click', () => onPick(value));
+    container.appendChild(b);
+  });
+}
+
+function markActivePreset(container, value){
+  container.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('active', b.dataset.value === value);
+  });
+}
+
+// スライダーと数値入力を連動させる共通処理です。
+// スライダーを動かすと数値が変わり、数値を打つとスライダーも動きます。
+function bindRangeAndNumber(range, num, onChange){
+  const syncFromRange = () => { num.value = range.value; if (onChange) onChange(); };
+  const syncFromNum = () => {
+    const min = Number(num.min), max = Number(num.max);
+    let v = Number(num.value);
+    if (Number.isNaN(v)) v = min;
+    v = Math.max(min, Math.min(max, v));
+    num.value = v; range.value = v;
+    if (onChange) onChange();
+  };
+  range.addEventListener('input', syncFromRange);
+  num.addEventListener('input', syncFromNum);
+}
+
+// ------------------------------
+// JavaScript：画像読み込み処理
+// 画像ファイル選択、ドラッグ&ドロップ、Ctrl+V貼り付け、クリップボードボタンに対応します。
+// ------------------------------
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  if (file) loadImageFile(file);
+});
+
+['dragenter','dragover'].forEach(name => dropZone.addEventListener(name, e => {
+  e.preventDefault(); dropZone.classList.add('dragover');
+}));
+['dragleave','drop'].forEach(name => dropZone.addEventListener(name, e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+}));
+dropZone.addEventListener('drop', e => {
+  const file = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
+  if (file) loadImageFile(file);
+});
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
+  if (file) loadImageFile(file);
+});
+
+document.addEventListener('paste', e => loadFromPasteEvent(e));
+pasteBtn.addEventListener('click', readClipboardImage);
+
+// Ctrl+Vで貼り付けられたクリップボードの中から画像ファイルを探します。
+function loadFromPasteEvent(e){
+  const cd = e.clipboardData;
+  if (!cd) return;
+  const fileFromFiles = [...(cd.files || [])].find(f => f.type.startsWith('image/'));
+  if (fileFromFiles) { loadImageFile(fileFromFiles, 'clipboard'); return; }
+  for (const item of cd.items || []) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) { loadImageFile(file, 'clipboard'); return; }
+    }
+  }
+}
+
+// 「クリップボードから貼付」ボタン用の処理です。
+// Clipboard APIを使うため、ブラウザによっては権限確認が出ることがあります。
+async function readClipboardImage(){
+  if (!navigator.clipboard || !navigator.clipboard.read) {
+    alert('このブラウザではボタンからのクリップボード画像読み込みに対応していない可能性があります。Ctrl+Vも試してください。');
+    return;
+  }
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = item.types.find(t => t.startsWith('image/'));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      const file = new File([blob], `clipboard_${Date.now()}.png`, { type });
+      loadImageFile(file, 'clipboard');
+      return;
+    }
+    alert('クリップボードに画像が見つかりませんでした。');
+  } catch (err) {
+    alert('クリップボードを読み取れませんでした。Ctrl+Vで貼り付けるか、ブラウザの権限を確認してください。');
+  }
+}
+
+// 実際に画像ファイルを読み込み、canvasに描画する中心処理です。
+// 新しい画像を読み込むと、Undo履歴や選択範囲も初期化します。
+function loadImageFile(file, source='file'){
+  if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください。'); return; }
+  fileBaseName = source === 'clipboard'
+    ? `clipboard_${new Date().toISOString().replace(/[:.]/g,'-')}`
+    : (file.name.replace(/\.[^.]+$/, '') || 'edited_image');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      baseCanvas.width = canvas.width = img.naturalWidth;
+      baseCanvas.height = canvas.height = img.naturalHeight;
+      baseCtx.clearRect(0,0,baseCanvas.width,baseCanvas.height);
+      baseCtx.drawImage(img,0,0);
+      originalImageData = baseCtx.getImageData(0,0,baseCanvas.width,baseCanvas.height);
+      historyStack = [];
+      selection = null;
+      stampPoint = null;
+      imageLoaded = true;
+      syncSelectionInputs();
+      empty.style.display = 'none';
+      canvas.style.display = 'block';
+      enableControls(true);
+      fitToView();
+      render();
+      updateSelectionInfo();
+      updateStatus(`読込完了：${file.name || 'clipboard'} / ${canvas.width} × ${canvas.height}px`);
+      updatePanUI();
+    };
+    img.onerror = () => alert('画像の読み込みに失敗しました。');
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// 画像が読み込まれるまでは使えないボタンを無効化し、読み込み後に有効化します。
+function enableControls(enabled){
+  [resetBtn, downloadBtn, fitBtn, zoomInBtn, zoomOutBtn, actualBtn].forEach(b => b.disabled = !enabled);
+  undoBtn.disabled = historyStack.length === 0;
+  updateModeUI();
+}
+
+// ------------------------------
+// JavaScript：マウス・キーボード操作
+// 範囲選択、スタンプ配置、Ctrl+ドラッグ移動、Ctrl+ZのUndoを処理します。
+// ------------------------------
+window.addEventListener('keydown', e => {
+  // Ctrl+Z / Cmd+Z で「元に戻す」
+  // 入力欄で編集中の場合は、ブラウザ標準の文字入力のUndoを優先します。
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    const tag = (e.target?.tagName || '').toLowerCase();
+    const isEditingText = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable;
+    if (!isEditingText) {
+      e.preventDefault();
+      undoLastAction();
+      return;
+    }
+  }
+
+  if (e.key === 'Control' || e.metaKey) {
+    ctrlPanHint = true;
+    updatePanUI();
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'Control' || !e.ctrlKey) {
+    ctrlPanHint = false;
+    updatePanUI();
+  }
+});
+window.addEventListener('blur', () => {
+  ctrlPanHint = false;
+  isPanning = false;
+  updatePanUI();
+});
+canvasWrap.addEventListener('mousedown', e => {
+  if (!imageLoaded) return;
+  if (!shouldStartPan(e)) return;
+  startPan(e);
+});
+
+canvas.addEventListener('mouseenter', e => {
+  mouseOnCanvas = true;
+  if (isStampMode() && !isPanning && !ctrlPanHint) {
+    stampPoint = getCanvasPoint(e);
+    render();
+  }
+});
+canvas.addEventListener('mouseleave', () => {
+  mouseOnCanvas = false;
+  stampPoint = null;
+  render();
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (!imageLoaded) return;
+  if (shouldStartPan(e)) {
+    startPan(e);
+    return;
+  }
+  const p = getCanvasPoint(e);
+  if (isStampMode()) {
+    pushHistory();
+    drawStamp(baseCtx, p.x, p.y, false);
+    render();
+    undoBtn.disabled = false;
+    updateStatus('スタンプを配置しました。');
+    return;
+  }
+  isDragging = true;
+  dragStart = p;
+  selection = { x:p.x, y:p.y, w:0, h:0 };
+  render();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!imageLoaded) return;
+
+  if (isPanning) {
+    e.preventDefault();
+    const dx = e.clientX - panStartX;
+    const dy = e.clientY - panStartY;
+    panX = panStartOffsetX + dx;
+    panY = panStartOffsetY + dy;
+    applyPanTransform();
+    return;
+  }
+
+  if (mouseOnCanvas && isStampMode() && !isPanning && !ctrlPanHint) {
+    stampPoint = getCanvasPoint(e);
+    render();
+  }
+  if (isDragging && !isStampMode()) {
+    const p = getCanvasPoint(e);
+    selection = normalizeRect(dragStart.x, dragStart.y, p.x, p.y);
+    syncSelectionInputs();
+    render();
+    updateSelectionInfo();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  if (isPanning) {
+    isPanning = false;
+    updatePanUI();
+    return;
+  }
+  if (!isDragging) return;
+  isDragging = false;
+  if (selection && (selection.w < 2 || selection.h < 2)) selection = null;
+  syncSelectionInputs();
+  render();
+  updateSelectionInfo();
+});
+
+// CtrlキーまたはCommandキーを押しながらドラッグしたら、画像移動モードとして扱います。
+function shouldStartPan(e){
+  return e.ctrlKey || e.metaKey;
+}
+
+// Ctrl+ドラッグ移動の開始処理です。
+// 開始位置と現在の移動量を覚えて、mousemoveで差分を計算します。
+function startPan(e){
+  e.preventDefault();
+  e.stopPropagation();
+  isDragging = false;
+  isPanning = true;
+  ctrlPanHint = true;
+  panStartX = e.clientX;
+  panStartY = e.clientY;
+  panStartOffsetX = panX;
+  panStartOffsetY = panY;
+  updatePanUI();
+}
+
+// マウスの画面上の位置を、canvas画像内の座標に変換します。
+// ズーム表示されていても、元画像のX/Y座標として取得できます。
+function getCanvasPoint(e){
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  return {
+    x:Math.max(0,Math.min(canvas.width,Math.round(x))),
+    y:Math.max(0,Math.min(canvas.height,Math.round(y)))
+  };
+}
+
+// ドラッグ開始点と終了点から、左上X/Y/幅/高さの形に整えます。
+function normalizeRect(x1,y1,x2,y2){
+  return {
+    x:Math.round(Math.min(x1,x2)),
+    y:Math.round(Math.min(y1,y2)),
+    w:Math.round(Math.abs(x2-x1)),
+    h:Math.round(Math.abs(y2-y1))
+  };
+}
+
+// ------------------------------
+// JavaScript：描画・リアルタイムプレビュー
+// baseCanvasが確定済み画像、canvasが画面表示用です。
+// スライダー変更中はcanvasだけに仮描画し、「適用」するまでbaseCanvasは変えません。
+// ------------------------------
+// 画面表示用canvasを毎回描き直す関数です。
+// 選択範囲がある場合は、現在の加工モードのプレビューも重ねて表示します。
+function render(){
+  if (!imageLoaded) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(baseCanvas,0,0);
+
+  if (selection && isAreaEffectMode()) {
+    const rect = clampRect(selection);
+    if (rect.w > 1 && rect.h > 1) applySelectedEffectToContext(ctx, rect);
+    drawSelectionFrame(rect);
+  }
+  if (isStampMode() && mouseOnCanvas && stampPoint && !isPanning && !ctrlPanHint) {
+    drawStamp(ctx, stampPoint.x, stampPoint.y, true);
+  }
+  updateModeUI();
+}
+
+// 選択中の四角い範囲を赤い点線枠で表示します。
+function drawSelectionFrame(rect){
+  ctx.save();
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = Math.max(2, 2 / zoom);
+  ctx.setLineDash([8 / zoom, 5 / zoom]);
+  ctx.strokeRect(rect.x + .5, rect.y + .5, rect.w, rect.h);
+  ctx.fillStyle = 'rgba(239,68,68,.12)';
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
+}
+
+// 絵文字・顔文字スタンプを指定座標に描画します。
+// preview=true のときは半透明＋枠付きで、配置前の見本として表示します。
+function drawStamp(targetCtx, x, y, preview){
+  const text = getCurrentStampText();
+  const size = Number(stampSize.value);
+  const rot = Number(stampRotate.value) * Math.PI / 180;
+  const alpha = Number(stampOpacity.value) / 100;
+  targetCtx.save();
+  targetCtx.translate(x, y);
+  targetCtx.rotate(rot);
+  targetCtx.globalAlpha = preview ? Math.min(alpha, .72) : alpha;
+  targetCtx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Meiryo",sans-serif`;
+  targetCtx.textAlign = 'center';
+  targetCtx.textBaseline = 'middle';
+  targetCtx.lineJoin = 'round';
+  targetCtx.strokeStyle = preview ? 'rgba(255,255,255,.65)' : 'rgba(255,255,255,.9)';
+  targetCtx.lineWidth = Math.max(3, size * 0.08);
+  targetCtx.strokeText(text, 0, 0);
+  targetCtx.fillStyle = '#111827';
+  targetCtx.fillText(text, 0, 0);
+
+  if (preview) {
+    targetCtx.globalAlpha = 1;
+    targetCtx.strokeStyle = 'rgba(245,158,11,.85)';
+    targetCtx.lineWidth = Math.max(2, 2 / zoom);
+    targetCtx.setLineDash([6 / zoom, 4 / zoom]);
+    const metrics = targetCtx.measureText(text);
+    const w = Math.max(size, metrics.width) + 16;
+    const h = size + 16;
+    targetCtx.strokeRect(-w/2, -h/2, w, h);
+  }
+  targetCtx.restore();
+}
+
+// ------------------------------
+// JavaScript：加工適用処理
+// 「選択範囲に適用」ボタンを押したとき、プレビューではなく実画像側に加工を書き込みます。
+// ------------------------------
+applyBtn.addEventListener('click', () => {
+  if (!imageLoaded) return;
+  if (isStampMode()) return;
+  if (!selection) { alert('加工する範囲をドラッグで選択してください。'); return; }
+  const rect = clampRect(selection);
+  if (rect.w < 2 || rect.h < 2) return;
+  pushHistory();
+  applySelectedEffectToContext(baseCtx, rect);
+  selection = null;
+  syncSelectionInputs();
+  render();
+  updateSelectionInfo();
+  undoBtn.disabled = false;
+  updateStatus('加工を適用しました。');
+});
+
+// 選択範囲が画像の外にはみ出さないように補正します。
+function clampRect(rect){
+  const x = Math.max(0, Math.min(canvas.width - 1, rect.x));
+  const y = Math.max(0, Math.min(canvas.height - 1, rect.y));
+  const w = Math.max(1, Math.min(canvas.width - x, rect.w));
+  const h = Math.max(1, Math.min(canvas.height - y, rect.h));
+  return {x,y,w,h};
+}
+
+
+// 範囲数値入力欄を表示・非表示にし、入力できる最大値を画像サイズに合わせます。
+function updateSelectionEditorUI(){
+  const editable = imageLoaded && isAreaEffectMode();
+  selectionEditor.style.display = editable ? 'block' : 'none';
+  [rectX, rectY, rectW, rectH].forEach(input => input.disabled = !editable);
+  if (editable) {
+    rectX.max = Math.max(0, canvas.width - 1);
+    rectY.max = Math.max(0, canvas.height - 1);
+    rectW.max = Math.max(1, canvas.width);
+    rectH.max = Math.max(1, canvas.height);
+  }
+}
+
+// マウスで選択した範囲を、X/Y/幅/高さの数値欄に反映します。
+function syncSelectionInputs(){
+  if (!imageLoaded) return;
+  if (selection) {
+    const rect = clampRect(selection);
+    rectX.value = rect.x;
+    rectY.value = rect.y;
+    rectW.value = rect.w;
+    rectH.value = rect.h;
+  } else {
+    rectX.value = 0;
+    rectY.value = 0;
+    rectW.value = Math.min(100, canvas.width || 100);
+    rectH.value = Math.min(100, canvas.height || 100);
+  }
+}
+
+// X/Y/幅/高さの数値欄を変更したとき、選択範囲を更新してプレビューし直します。
+function updateSelectionFromInputs(){
+  if (!imageLoaded || isStampMode()) return;
+  const raw = {
+    x: Number(rectX.value),
+    y: Number(rectY.value),
+    w: Number(rectW.value),
+    h: Number(rectH.value)
+  };
+  if ([raw.x, raw.y, raw.w, raw.h].some(v => Number.isNaN(v))) return;
+  raw.x = Math.round(raw.x);
+  raw.y = Math.round(raw.y);
+  raw.w = Math.round(raw.w);
+  raw.h = Math.round(raw.h);
+  raw.x = Math.max(0, Math.min(canvas.width - 1, raw.x));
+  raw.y = Math.max(0, Math.min(canvas.height - 1, raw.y));
+  raw.w = Math.max(1, Math.min(canvas.width - raw.x, raw.w));
+  raw.h = Math.max(1, Math.min(canvas.height - raw.y, raw.h));
+  selection = raw;
+  syncSelectionInputs();
+  render();
+  updateSelectionInfo();
+}
+
+// 加工前の画像をUndo履歴に保存します。
+// 「元に戻す」やCtrl+Zでは、この履歴から1つ前の画像を取り出します。
+function pushHistory(){
+  historyStack.push(baseCtx.getImageData(0,0,baseCanvas.width,baseCanvas.height));
+  if (historyStack.length > 30) historyStack.shift();
+}
+
+// モザイク加工：選択範囲をブロック単位で平均色に置き換えます。
+function applyMosaicToContext(targetCtx, rect, blockSize){
+  const img = targetCtx.getImageData(rect.x, rect.y, rect.w, rect.h);
+  const data = img.data;
+  for (let by=0; by<rect.h; by+=blockSize) {
+    for (let bx=0; bx<rect.w; bx+=blockSize) {
+      const bw = Math.min(blockSize, rect.w - bx), bh = Math.min(blockSize, rect.h - by);
+      let r=0,g=0,b=0,a=0,c=0;
+      for (let y=0;y<bh;y++) for (let x=0;x<bw;x++) {
+        const i = ((by+y)*rect.w + (bx+x))*4;
+        r+=data[i]; g+=data[i+1]; b+=data[i+2]; a+=data[i+3]; c++;
+      }
+      r=Math.round(r/c); g=Math.round(g/c); b=Math.round(b/c); a=Math.round(a/c);
+      for (let y=0;y<bh;y++) for (let x=0;x<bw;x++) {
+        const i = ((by+y)*rect.w + (bx+x))*4;
+        data[i]=r; data[i+1]=g; data[i+2]=b; data[i+3]=a;
+      }
+    }
+  }
+  targetCtx.putImageData(img, rect.x, rect.y);
+}
+
+// ぼかし加工：一時canvasとCanvas filterを使って、選択範囲だけをぼかします。
+function applyBlurToContext(targetCtx, rect, radius){
+  const pad = Math.ceil(radius * 2);
+  const sx = Math.max(0, rect.x - pad), sy = Math.max(0, rect.y - pad);
+  const sw = Math.min(canvas.width - sx, rect.w + pad*2), sh = Math.min(canvas.height - sy, rect.h + pad*2);
+  const src = document.createElement('canvas'); src.width = sw; src.height = sh;
+  src.getContext('2d').drawImage(targetCtx.canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  const blurred = document.createElement('canvas'); blurred.width = sw; blurred.height = sh;
+  const bctx = blurred.getContext('2d');
+  bctx.filter = `blur(${radius}px)`;
+  bctx.drawImage(src,0,0);
+  targetCtx.save();
+  targetCtx.beginPath(); targetCtx.rect(rect.x, rect.y, rect.w, rect.h); targetCtx.clip();
+  targetCtx.drawImage(blurred, sx, sy);
+  targetCtx.restore();
+}
+
+// 現在選ばれている加工モードに応じて、実際の加工関数を呼び分けます。
+// 新しい範囲加工を追加したい場合は、ここにcaseを追加します。
+function applySelectedEffectToContext(targetCtx, rect){
+  switch (mode.value) {
+    case 'mosaic':
+      applyMosaicToContext(targetCtx, rect, Number(mosaicSize.value));
+      break;
+    case 'blur':
+      applyBlurToContext(targetCtx, rect, Number(blurSize.value));
+      break;
+    case 'blackout':
+      fillRectEffect(targetCtx, rect, '#000000', 1);
+      break;
+    case 'whiteout':
+      fillRectEffect(targetCtx, rect, '#ffffff', 1);
+      break;
+    case 'translucent':
+      fillRectEffect(targetCtx, rect, '#000000', Number(translucentOpacity.value) / 100);
+      break;
+    case 'border':
+      drawBorderEffect(targetCtx, rect, Number(borderWidth.value));
+      break;
+    case 'hatch':
+      drawHatchEffect(targetCtx, rect, Number(hatchSpacing.value));
+      break;
+    case 'grayscale':
+      applyGrayscaleToContext(targetCtx, rect);
+      break;
+    case 'noise':
+      applyNoiseToContext(targetCtx, rect, Number(noiseStrength.value));
+      break;
+  }
+}
+
+// 黒塗り・白塗り・半透明塗りに使う共通の塗りつぶし処理です。
+function fillRectEffect(targetCtx, rect, color, alpha){
+  targetCtx.save();
+  targetCtx.globalAlpha = alpha;
+  targetCtx.fillStyle = color;
+  targetCtx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  targetCtx.restore();
+}
+
+// 枠線加工：選択範囲の内側に赤い枠線を描きます。
+function drawBorderEffect(targetCtx, rect, lineWidth){
+  const half = lineWidth / 2;
+  targetCtx.save();
+  targetCtx.strokeStyle = '#ef4444';
+  targetCtx.lineWidth = lineWidth;
+  targetCtx.setLineDash([]);
+  targetCtx.strokeRect(rect.x + half, rect.y + half, Math.max(1, rect.w - lineWidth), Math.max(1, rect.h - lineWidth));
+  targetCtx.restore();
+}
+
+// 斜線加工：選択範囲の中だけに赤い斜線を繰り返し描きます。
+function drawHatchEffect(targetCtx, rect, spacing){
+  targetCtx.save();
+  targetCtx.beginPath();
+  targetCtx.rect(rect.x, rect.y, rect.w, rect.h);
+  targetCtx.clip();
+  targetCtx.strokeStyle = 'rgba(239,68,68,.9)';
+  targetCtx.lineWidth = Math.max(2, spacing * 0.16);
+  const start = rect.x - rect.h;
+  const end = rect.x + rect.w;
+  for (let x = start; x < end; x += spacing) {
+    targetCtx.beginPath();
+    targetCtx.moveTo(x, rect.y + rect.h);
+    targetCtx.lineTo(x + rect.h, rect.y);
+    targetCtx.stroke();
+  }
+  targetCtx.restore();
+}
+
+// グレースケール加工：RGBを計算して、選択範囲を白黒にします。
+function applyGrayscaleToContext(targetCtx, rect){
+  const img = targetCtx.getImageData(rect.x, rect.y, rect.w, rect.h);
+  const data = img.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = Math.round(data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+    data[i] = gray;
+    data[i+1] = gray;
+    data[i+2] = gray;
+  }
+  targetCtx.putImageData(img, rect.x, rect.y);
+}
+
+// ノイズ加工：RGB値にランダムな値を足し引きして、ざらついた見た目にします。
+function applyNoiseToContext(targetCtx, rect, strength){
+  const img = targetCtx.getImageData(rect.x, rect.y, rect.w, rect.h);
+  const data = img.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const n = Math.round((Math.random() * 2 - 1) * strength);
+    data[i] = Math.max(0, Math.min(255, data[i] + n));
+    data[i+1] = Math.max(0, Math.min(255, data[i+1] + n));
+    data[i+2] = Math.max(0, Math.min(255, data[i+2] + n));
+  }
+  targetCtx.putImageData(img, rect.x, rect.y);
+}
+
+// ------------------------------
+// JavaScript：ボタン操作
+// 選択解除、元に戻す、全リセット、PNG保存、拡大縮小などのボタン処理です。
+// ------------------------------
+clearSelBtn.addEventListener('click', () => {
+  selection = null;
+  syncSelectionInputs();
+  render();
+  updateSelectionInfo();
+  updateStatus('選択を解除しました。');
+});
+
+undoBtn.addEventListener('click', undoLastAction);
+
+// Undo処理：履歴から1つ前の画像を取り出してbaseCanvasに戻します。
+function undoLastAction(){
+  if (historyStack.length === 0) return;
+  const prev = historyStack.pop();
+  baseCtx.putImageData(prev,0,0);
+  selection = null;
+  syncSelectionInputs();
+  render();
+  updateSelectionInfo();
+  undoBtn.disabled = historyStack.length === 0;
+  updateStatus('1つ前に戻しました。');
+}
+
+resetBtn.addEventListener('click', () => {
+  if (!originalImageData) return;
+  if (!confirm('すべての加工を取り消して、読み込み直後の状態に戻しますか？')) return;
+  baseCtx.putImageData(originalImageData,0,0);
+  historyStack = [];
+  selection = null;
+  syncSelectionInputs();
+  render();
+  updateSelectionInfo();
+  undoBtn.disabled = true;
+  updateStatus('全リセットしました。');
+});
+
+downloadBtn.addEventListener('click', () => {
+  if (!imageLoaded) return;
+  const a = document.createElement('a');
+  a.href = baseCanvas.toDataURL('image/png');
+  a.download = `${fileBaseName}_masked.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+
+fitBtn.addEventListener('click', fitToView);
+actualBtn.addEventListener('click', setActualSizeTopLeft);
+zoomInBtn.addEventListener('click', () => setZoom(Math.min(4, zoom + .1)));
+zoomOutBtn.addEventListener('click', () => setZoom(Math.max(.1, zoom - .1)));
+
+
+// 100%ボタン：等倍表示に戻し、画像の左上を表示エリア左上に合わせます。
+function setActualSizeTopLeft(){
+  if (!imageLoaded) return;
+  // 100%表示では、拡大後に画像を移動していても見失わないように、
+  // 画像の左上を表示エリアの左上へ合わせます。
+  setZoom(1, { keepVisualCenter:false, silent:true });
+  alignImageTopLeft();
+  render();
+  updateStatus(`表示倍率：100% / 左上合わせ / 画像：${canvas.width} × ${canvas.height}px`);
+}
+
+// 画像左上合わせ：現在のcanvas位置を調べ、表示エリア左上に来るよう移動量を補正します。
+function alignImageTopLeft(){
+  if (!imageLoaded) return;
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+  const wrapStyle = getComputedStyle(canvasWrap);
+  const targetLeft = wrapRect.left + (parseFloat(wrapStyle.paddingLeft) || 0);
+  const targetTop = wrapRect.top + (parseFloat(wrapStyle.paddingTop) || 0);
+
+  // canvasWrapはflexで中央寄せしているため、panX/panY=0でも画像は中央に来ます。
+  // そこで、現在のcanvas位置と表示エリア左上の差分だけtransformを補正します。
+  panX += targetLeft - canvasRect.left;
+  panY += targetTop - canvasRect.top;
+  applyPanTransform();
+}
+
+// 表示サイズ調整：画像全体が見えるようにズーム倍率を自動計算します。
+function fitToView(){
+  if (!imageLoaded) return;
+  const maxW = Math.max(220, canvasWrap.clientWidth - 50);
+  const maxH = Math.max(220, canvasWrap.clientHeight - 50);
+  const z = Math.min(maxW / canvas.width, maxH / canvas.height, 1);
+  panX = 0;
+  panY = 0;
+  setZoom(Math.max(.1, z), { keepVisualCenter:false });
+}
+
+// Ctrl+ホイール拡大縮小用：マウス位置をcanvas内の座標に変換します。
+function getCanvasPointFromClient(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX - rect.left) * (canvas.width / rect.width);
+  const y = (clientY - rect.top) * (canvas.height / rect.height);
+  return {
+    x: Math.max(0, Math.min(canvas.width, x)),
+    y: Math.max(0, Math.min(canvas.height, y))
+  };
+}
+
+// ズーム倍率を変更します。
+// Ctrl+ホイール時は、カーソル下の位置をなるべく固定して拡大縮小します。
+function setZoom(value, options = {}){
+  const oldZoom = zoom;
+  const newZoom = Math.round(Math.max(.1, Math.min(4, value)) * 100) / 100;
+  const hasAnchor = Number.isFinite(options.clientX) && Number.isFinite(options.clientY);
+  const anchor = hasAnchor ? getCanvasPointFromClient(options.clientX, options.clientY) : null;
+
+  zoom = newZoom;
+  canvas.style.width = `${canvas.width * zoom}px`;
+  canvas.style.height = `${canvas.height * zoom}px`;
+
+  if (hasAnchor && oldZoom > 0) {
+    // Ctrl+ホイール時に、カーソル下の画像位置がズレないように平行移動を補正します。
+    panX += anchor.x * (oldZoom - newZoom);
+    panY += anchor.y * (oldZoom - newZoom);
+  } else if (options.keepVisualCenter === false) {
+    panX = 0;
+    panY = 0;
+  }
+
+  applyPanTransform();
+  render();
+  if (!options.silent) updateStatus(`表示倍率：${Math.round(zoom*100)}% / 画像：${canvas.width} × ${canvas.height}px`);
+}
+
+// Ctrl+マウスホイールで拡大縮小する処理です。
+canvasWrap.addEventListener('wheel', e => {
+  if (!imageLoaded || !(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+  setZoom(zoom * factor, { clientX:e.clientX, clientY:e.clientY });
+}, { passive:false });
+
+function updateStatus(text){ statusEl.textContent = text; }
+
+// 画面下部の案内欄に、現在の選択範囲やモード説明を表示します。
+function updateSelectionInfo(){
+  if (isStampMode()) {
+    const label = mode.value === 'emojiStamp' ? '絵文字スタンプ' : '顔文字スタンプ';
+    selectionInfo.innerHTML = `${label}モード：画像上をクリックすると、現在のスタンプをその場所に貼り付けます。`;
+    return;
+  }
+  if (!selection) {
+    selectionInfo.innerHTML = '選択範囲：なし<br>ドラッグで範囲指定、または上の数値欄にX/Y/幅/高さを入力してください。';
+    return;
+  }
+  selectionInfo.innerHTML = `選択範囲：あり<br>x=${selection.x}, y=${selection.y}, 幅=${selection.w}, 高さ=${selection.h}`;
+}
+</script>
+</body>
+</html>
